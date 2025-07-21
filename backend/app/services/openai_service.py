@@ -1,27 +1,11 @@
-# Phase 2.5: OpenAI Chat Integration
-## Transform Memory System into Live AI Tutor
-
-### 🎯 Phase 2.5 Mission
-**Transform your brilliant 4-layer memory system from context assembly into a live, Socratic AI tutoring experience**
-
-Your enhanced memory system is now operational and assembling perfect context. Phase 2.5 connects this to OpenAI's GPT-4 to create actual intelligent tutoring sessions.
-
----
-
-## 🚀 Implementation Steps
-
-### Step 1: OpenAI Service Integration
-
-**Create: `backend/app/services/openai_service.py`**
-```python
 """
-OpenAI Chat Service - Phase 2.5 Integration
-Connects your enhanced memory system to GPT-4 for live tutoring
+OpenAI Chat Service - Phase 2.5 Complete Integration
+Connects your enhanced memory system to GPT-4 for live Socratic tutoring
 """
 
-import openai
-from typing import Dict, Any, List, Optional
 import logging
+from typing import Dict, Any, List, Optional
+from openai import AsyncOpenAI
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -30,7 +14,7 @@ class OpenAIService:
     """Service for OpenAI API integration with enhanced memory"""
     
     def __init__(self):
-        openai.api_key = settings.openai_api_key
+        self.client = AsyncOpenAI(api_key=settings.openai_api_key)
         self.model = settings.openai_model or "gpt-4"
     
     async def generate_socratic_response(
@@ -44,6 +28,8 @@ class OpenAIService:
         """
         
         try:
+            logger.info(f"🤖 Generating response with {len(memory_context)} chars of memory context")
+            
             # Build messages with your memory context as system prompt
             messages = [
                 {
@@ -62,8 +48,10 @@ class OpenAIService:
                 "content": user_message
             })
             
+            logger.info(f"🤖 Sending to {self.model} with {len(messages)} messages")
+            
             # Generate response with GPT-4
-            response = await openai.ChatCompletion.acreate(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=0.7,  # Balanced creativity for tutoring
@@ -76,16 +64,19 @@ class OpenAIService:
             # Analyze response for Socratic effectiveness
             socratic_analysis = await self._analyze_socratic_response(ai_response)
             
+            logger.info(f"✅ Generated {len(ai_response)} char response with {socratic_analysis['question_count']} questions")
+            
             return {
                 "response": ai_response,
                 "socratic_analysis": socratic_analysis,
-                "token_usage": response.usage._asdict(),
+                "token_usage": response.usage.model_dump() if response.usage else {},
                 "model_used": self.model,
-                "success": True
+                "success": True,
+                "memory_context_chars": len(memory_context)
             }
             
         except Exception as e:
-            logger.error(f"OpenAI generation failed: {e}")
+            logger.error(f"❌ OpenAI generation failed: {e}")
             return await self._create_fallback_response(user_message)
     
     async def _analyze_socratic_response(self, response: str) -> Dict[str, Any]:
@@ -93,65 +84,45 @@ class OpenAIService:
         
         question_count = response.count('?')
         has_direct_answer = any(phrase in response.lower() for phrase in [
-            'the answer is', 'it is', 'this means', 'the definition'
+            'the answer is', 'it is defined as', 'communication is', 'the definition'
         ])
+        
+        # Check for Socratic patterns
+        socratic_words = ['what', 'how', 'why', 'can you think', 'have you noticed', 'consider']
+        socratic_count = sum(1 for word in socratic_words if word in response.lower())
         
         return {
             "question_count": question_count,
-            "socratic_compliance": "high" if question_count >= 2 and not has_direct_answer else "moderate",
-            "engagement_level": "high" if question_count > 0 else "low",
-            "teaching_approach": "questioning" if question_count >= 2 else "explanatory"
+            "socratic_compliance": "high" if question_count >= 2 and not has_direct_answer else "moderate" if question_count >= 1 else "low",
+            "engagement_level": "high" if socratic_count >= 2 else "moderate" if socratic_count >= 1 else "low",
+            "teaching_approach": "questioning" if question_count >= 2 else "mixed" if question_count >= 1 else "explanatory",
+            "has_direct_answers": has_direct_answer,
+            "socratic_word_count": socratic_count
         }
     
     async def _create_fallback_response(self, user_message: str) -> Dict[str, Any]:
         """Create fallback response when OpenAI fails"""
         
-        fallback_responses = [
-            "That's an interesting question! What experiences have you had that might relate to this?",
-            "I'm curious about your thinking here. Can you tell me more about what sparked this question?",
-            "Let's explore this together. What comes to mind when you think about this topic?"
-        ]
+        # Intelligent fallbacks based on message content
+        message_lower = user_message.lower()
+        
+        if 'communication' in message_lower:
+            fallback = "That's a thought-provoking question about communication! Can you think of a recent conversation you had? What made it effective or challenging?"
+        elif any(word in message_lower for word in ['what', 'how', 'why']):
+            fallback = "I see you're asking an important question! Before I share thoughts, what's your initial thinking on this? What comes to mind first?"
+        else:
+            fallback = "That's an interesting perspective! What experiences have you had that relate to this topic?"
         
         return {
-            "response": fallback_responses[0],  # Could randomize
-            "socratic_analysis": {"fallback": True, "socratic_compliance": "high"},
+            "response": fallback,
+            "socratic_analysis": {
+                "question_count": 2,
+                "socratic_compliance": "high", 
+                "engagement_level": "high",
+                "teaching_approach": "questioning",
+                "fallback": True
+            },
             "success": False,
-            "error": "OpenAI service unavailable - using fallback"
+            "error": "OpenAI service unavailable - using intelligent fallback",
+            "model_used": "fallback_socratic"
         }
-```
-
-### Step 2: Enhanced Chat Endpoint 
-
-**Update: `backend/app/api/v1/endpoints/chat.py`** (NEW FILE)
-```python
-"""
-Enhanced Chat API - Phase 2.5 Implementation
-Live AI tutoring with 4-layer memory integration
-"""
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-import uuid
-from datetime import datetime
-
-from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models import User, Conversation, Message
-from app.services.memory_service import EnhancedMemoryService
-from app.services.openai_service import OpenAIService
-from app.schemas.chat import (
-    ChatRequest, ChatResponse, SocraticAnalysis, 
-    ConversationCreateResponse
-)
-
-router = APIRouter()
-
-@router.post("/{module_id}", response_model=ChatResponse)
-async def chat_with_enhanced_memory(
-    module_id: int,
-    request: ChatRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    **Phase 2.5: Live AI Tutoring with Enhanced Memory**
