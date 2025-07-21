@@ -1,3 +1,9 @@
+#!/bin/bash
+# Quick fix for chat.py syntax error
+
+echo "🔧 Quick fixing chat.py syntax error..."
+
+cat > backend/app/api/v1/endpoints/chat.py << 'EOF'
 """
 Enhanced Chat API Endpoints - FIXED VERSION
 File: backend/app/api/v1/endpoints/chat.py
@@ -283,3 +289,10 @@ async def delete_conversation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete conversation: {str(e)}"
         )
+EOF
+
+echo "✅ Fixed chat.py syntax error!"
+echo ""
+echo "🚀 Now try starting the server:"
+echo "   cd backend"  
+echo "   uvicorn app.main:app --reload"

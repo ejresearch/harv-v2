@@ -9,3 +9,7 @@ python-multipart==0.0.9
 openai==1.12.0
 python-dotenv==1.0.1
 openai==1.12.0
+
+# Real-time metrics and monitoring
+psutil>=5.9.0
+websockets>=11.0.0
