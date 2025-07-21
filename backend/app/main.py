@@ -1,6 +1,6 @@
 """
 FastAPI application setup for Harv v2.0
-Clean, production-ready application structure
+Clean, production-ready application structure with enhanced memory system
 """
 
 from fastapi import FastAPI, HTTPException
@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 
 from .core.config import settings
 from .core.database import create_tables
-from .api import auth, health
+from .api.v1.api import api_router
 
 # Create FastAPI application
 app = FastAPI(
@@ -62,9 +62,8 @@ async def global_exception_handler(request, exc):
             }
         )
 
-# Include API routers
-app.include_router(health.router, tags=["Health"])
-app.include_router(auth.router, prefix=settings.api_prefix, tags=["Authentication"])
+# Include API v1 router with all endpoints (including enhanced memory system)
+app.include_router(api_router, prefix=settings.api_prefix)
 
 # Root endpoint
 @app.get("/")
@@ -74,5 +73,6 @@ async def root():
         "message": f"Welcome to {settings.app_name}",
         "version": settings.version,
         "status": "healthy",
-        "docs": "/docs" if settings.debug else "Documentation disabled in production"
+        "docs": "/docs" if settings.debug else "Documentation disabled in production",
+        "enhanced_memory": "4-layer memory system active"
     }
