@@ -1,3 +1,12 @@
+#!/bin/bash
+# Quick fix for main.py import error
+
+echo "🔧 Quick fixing main.py import error..."
+
+cd backend/app
+
+# Create a simplified main.py that works with your FastAPI version
+cat > main.py << 'EOF'
 """
 Harv v2.0 - FastAPI Application (Fixed Version)
 Updated to work with your FastAPI version
@@ -225,3 +234,21 @@ async def simple_health():
 async def version():
     """Version endpoint"""
     return settings.version
+EOF
+
+echo "✅ Fixed main.py created (compatible with your FastAPI version)"
+
+echo ""
+echo "🚀 Now try starting your server:"
+echo "   uvicorn app.main:app --reload --port 8000"
+echo ""
+echo "✅ Key fixes applied:"
+echo "   • Removed problematic BaseHTTPMiddleware import"
+echo "   • Used simple startup/shutdown events instead of lifespan"
+echo "   • Kept all essential functionality"
+echo "   • Added API router inclusion (the critical fix!)"
+echo ""
+echo "🎯 After server starts, test:"
+echo "   curl http://localhost:8000/api/v1/auth/register"
+echo "   Visit http://localhost:8000/docs"
+echo "   Visit http://localhost:8000/demo"
