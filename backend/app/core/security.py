@@ -94,3 +94,18 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials"
         )
+
+# Optional authentication for development
+from fastapi.security import HTTPBearer
+from typing import Optional
+
+oauth2_scheme_optional = HTTPBearer(auto_error=False)
+
+async def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optional)):
+    """Get current user - optional for development"""
+    if not token:
+        return None
+    try:
+        return await get_current_user(token)
+    except:
+        return None
