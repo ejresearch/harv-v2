@@ -1,31 +1,17 @@
 # backend/app/api/v1/endpoints/admin.py
-"""
-Admin Content Management - Claude Projects Style Editor
-In-browser content editing with file upload/download capabilities
-"""
-
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Form
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
-from datetime import datetime
 import json
-import io
-import tempfile
-import os
-from pathlib import Path
+import re
 
-from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
-from app.models.course import Module
+from ....core.database import get_db
+from ....core.security import get_current_user
+from ....models.user import User
+from ....models.course import Module
 
 router = APIRouter()
-
-# =========================================================================
-# PYDANTIC SCHEMAS
-# =========================================================================
 
 class ModuleContentUpdate(BaseModel):
     title: str
@@ -36,648 +22,405 @@ class ModuleContentUpdate(BaseModel):
     resources: Optional[str] = None
     difficulty_level: str = "intermediate"
     estimated_duration: int = 45
-    is_active: bool = True
 
-class BulkContentUpdate(BaseModel):
-    modules: List[ModuleContentUpdate]
-
-class ContentExportFormat(BaseModel):
-    include_system_prompts: bool = True
-    include_module_prompts: bool = True
-    include_objectives: bool = True
-    include_metadata: bool = True
-    format_type: str = "structured_text"  # "structured_text", "json", "yaml"
-
-class FileUploadResult(BaseModel):
+class ContentExportResponse(BaseModel):
+    content: str
     filename: str
-    modules_processed: int
-    modules_updated: List[int]
-    errors: List[str]
-    warnings: List[str]
 
-# =========================================================================
-# CONTENT PARSING FUNCTIONS
-# =========================================================================
-
-def parse_structured_text_content(content: str) -> List[Dict[str, Any]]:
-    """
-    Parse Claude Projects style structured text content
-    Format:
-    # MODULE: Module Title
-    # DESCRIPTION: Module description
-    # DIFFICULTY: beginner|intermediate|advanced
-    # DURATION: 45
-    # SYSTEM_PROMPT:
-    Content here...
-    # END
-    # MODULE_PROMPT:
-    Content here...
-    # END
-    # LEARNING_OBJECTIVES:
-    - Objective 1
-    - Objective 2
-    # END
-    # RESOURCES:
-    Additional resources...
-    # END
-    ---
-    # MODULE: Next Module...
-    """
-    
-    modules = []
-    lines = content.strip().split('\n')
-    
-    current_module = {}
-    current_section = None
-    current_content = []
-    
-    for line in lines:
-        line = line.strip()
-        
-        # Module separator
-        if line == "---":
-            if current_module:
-                modules.append(current_module)
-            current_module = {}
-            current_section = None
-            current_content = []
-            continue
-        
-        # Section headers
-        if line.startswith("# MODULE:"):
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_module["title"] = line.replace("# MODULE:", "").strip()
-            current_section = None
-            current_content = []
-            
-        elif line.startswith("# DESCRIPTION:"):
-            current_module["description"] = line.replace("# DESCRIPTION:", "").strip()
-            
-        elif line.startswith("# DIFFICULTY:"):
-            current_module["difficulty_level"] = line.replace("# DIFFICULTY:", "").strip()
-            
-        elif line.startswith("# DURATION:"):
-            try:
-                current_module["estimated_duration"] = int(line.replace("# DURATION:", "").strip())
-            except ValueError:
-                current_module["estimated_duration"] = 45
-                
-        elif line.startswith("# SYSTEM_PROMPT:"):
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_section = "system_prompt"
-            current_content = []
-            
-        elif line.startswith("# MODULE_PROMPT:"):
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_section = "module_prompt"
-            current_content = []
-            
-        elif line.startswith("# LEARNING_OBJECTIVES:"):
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_section = "learning_objectives"
-            current_content = []
-            
-        elif line.startswith("# RESOURCES:"):
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_section = "resources"
-            current_content = []
-            
-        elif line == "# END":
-            if current_section and current_content:
-                current_module[current_section] = process_section_content(current_section, current_content)
-            current_section = None
-            current_content = []
-            
-        else:
-            # Content line
-            if current_section:
-                current_content.append(line)
-    
-    # Handle last section and module
-    if current_section and current_content:
-        current_module[current_section] = process_section_content(current_section, current_content)
-    
-    if current_module:
-        modules.append(current_module)
-    
-    return modules
-
-def process_section_content(section_type: str, content_lines: List[str]) -> Any:
-    """Process content based on section type"""
-    
-    if section_type == "learning_objectives":
-        # Parse list items
-        objectives = []
-        for line in content_lines:
-            line = line.strip()
-            if line.startswith("-") or line.startswith("•"):
-                objectives.append(line[1:].strip())
-            elif line:  # Non-empty line without bullet
-                objectives.append(line)
-        return objectives
-    else:
-        # Text content
-        return '\n'.join(content_lines).strip()
-
-def generate_structured_export(modules: List[Module], format_config: ContentExportFormat) -> str:
-    """Generate structured text export in Claude Projects format"""
-    
-    export_lines = []
-    
-    for i, module in enumerate(modules):
-        if i > 0:
-            export_lines.append("---")
-            export_lines.append("")
-        
-        # Basic info
-        export_lines.append(f"# MODULE: {module.title}")
-        export_lines.append(f"# DESCRIPTION: {module.description}")
-        
-        if format_config.include_metadata:
-            export_lines.append(f"# DIFFICULTY: {module.difficulty_level or 'intermediate'}")
-            export_lines.append(f"# DURATION: {module.estimated_duration or 45}")
-        
-        export_lines.append("")
-        
-        # System prompt
-        if format_config.include_system_prompts and module.system_prompt:
-            export_lines.append("# SYSTEM_PROMPT:")
-            export_lines.extend(module.system_prompt.split('\n'))
-            export_lines.append("# END")
-            export_lines.append("")
-        
-        # Module prompt
-        if format_config.include_module_prompts and module.module_prompt:
-            export_lines.append("# MODULE_PROMPT:")
-            export_lines.extend(module.module_prompt.split('\n'))
-            export_lines.append("# END")
-            export_lines.append("")
-        
-        # Learning objectives
-        if format_config.include_objectives and module.learning_objectives:
-            try:
-                objectives = json.loads(module.learning_objectives)
-                export_lines.append("# LEARNING_OBJECTIVES:")
-                for objective in objectives:
-                    export_lines.append(f"- {objective}")
-                export_lines.append("# END")
-                export_lines.append("")
-            except (json.JSONDecodeError, TypeError):
-                pass
-        
-        # Resources
-        if module.resources and module.resources.strip():
-            export_lines.append("# RESOURCES:")
-            export_lines.extend(module.resources.split('\n'))
-            export_lines.append("# END")
-            export_lines.append("")
-    
-    return '\n'.join(export_lines)
-
-# =========================================================================
-# API ENDPOINTS
-# =========================================================================
-
-@router.get("/modules/{module_id}/content")
-async def get_module_content_for_editing(
-    module_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get module content in format suitable for editing
-    Returns all editable fields for the content management interface
-    """
-    
-    # TODO: Add admin role check
-    # if not current_user.is_admin:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
-    module = db.query(Module).filter(Module.id == module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
-    
-    # Parse learning objectives
-    try:
-        learning_objectives = json.loads(module.learning_objectives) if module.learning_objectives else []
-    except (json.JSONDecodeError, TypeError):
-        learning_objectives = []
-    
-    return {
-        "module_id": module.id,
-        "title": module.title,
-        "description": module.description,
-        "system_prompt": module.system_prompt or "",
-        "module_prompt": module.module_prompt or "",
-        "learning_objectives": learning_objectives,
-        "resources": module.resources or "",
-        "difficulty_level": module.difficulty_level or "intermediate",
-        "estimated_duration": module.estimated_duration or 45,
-        "is_active": module.is_active,
-        "created_at": module.created_at.isoformat(),
-        "updated_at": module.updated_at.isoformat(),
-        "edit_session_id": f"edit_{module_id}_{int(datetime.utcnow().timestamp())}"
-    }
+class ContentUploadResponse(BaseModel):
+    status: str
+    filename: str
+    module_id: int
+    fields_updated: List[str]
+    message: str
 
 @router.put("/modules/{module_id}/content")
 async def update_module_content(
     module_id: int,
-    content_update: ModuleContentUpdate,
+    content: ModuleContentUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Update module content through the content management interface
-    Supports real-time editing with validation
-    """
+    """Update module content through admin interface"""
     
-    # TODO: Add admin role check
+    # TODO: Add admin role check in production
     # if not current_user.is_admin:
     #     raise HTTPException(status_code=403, detail="Admin access required")
     
-    module = db.query(Module).filter(Module.id == module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
-    
-    # Store original values for change tracking
-    original_values = {
-        "title": module.title,
-        "description": module.description,
-        "system_prompt": module.system_prompt,
-        "module_prompt": module.module_prompt,
-        "learning_objectives": module.learning_objectives,
-        "resources": module.resources,
-        "difficulty_level": module.difficulty_level,
-        "estimated_duration": module.estimated_duration
-    }
-    
-    # Update fields
-    module.title = content_update.title
-    module.description = content_update.description
-    module.system_prompt = content_update.system_prompt
-    module.module_prompt = content_update.module_prompt
-    module.learning_objectives = json.dumps(content_update.learning_objectives)
-    module.resources = content_update.resources
-    module.difficulty_level = content_update.difficulty_level
-    module.estimated_duration = content_update.estimated_duration
-    module.is_active = content_update.is_active
-    module.updated_at = datetime.utcnow()
-    
-    # Track changes
-    changes = []
-    for field, original_value in original_values.items():
-        new_value = getattr(module, field)
-        if field == "learning_objectives":
-            new_value = json.dumps(content_update.learning_objectives)
+    try:
+        module = db.query(Module).filter(Module.id == module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
         
-        if str(original_value) != str(new_value):
-            changes.append({
-                "field": field,
-                "old_value": str(original_value)[:100] + "..." if len(str(original_value)) > 100 else str(original_value),
-                "new_value": str(new_value)[:100] + "..." if len(str(new_value)) > 100 else str(new_value)
-            })
-    
-    db.commit()
-    db.refresh(module)
-    
-    return {
-        "status": "updated",
-        "module_id": module_id,
-        "title": module.title,
-        "changes_made": len(changes),
-        "change_details": changes,
-        "updated_at": module.updated_at.isoformat(),
-        "message": f"Module '{module.title}' updated successfully with {len(changes)} changes"
-    }
+        # Track what fields are being updated
+        updated_fields = []
+        
+        # Update all fields
+        if module.title != content.title:
+            module.title = content.title
+            updated_fields.append("title")
+            
+        if module.description != content.description:
+            module.description = content.description
+            updated_fields.append("description")
+            
+        if module.system_prompt != content.system_prompt:
+            module.system_prompt = content.system_prompt
+            updated_fields.append("system_prompt")
+            
+        if module.module_prompt != content.module_prompt:
+            module.module_prompt = content.module_prompt
+            updated_fields.append("module_prompt")
+            
+        # Handle learning objectives (stored as JSON string)
+        current_objectives = json.loads(module.learning_objectives) if module.learning_objectives else []
+        if current_objectives != content.learning_objectives:
+            module.learning_objectives = json.dumps(content.learning_objectives)
+            updated_fields.append("learning_objectives")
+            
+        if (module.resources or "") != (content.resources or ""):
+            module.resources = content.resources
+            updated_fields.append("resources")
+            
+        if module.difficulty_level != content.difficulty_level:
+            module.difficulty_level = content.difficulty_level
+            updated_fields.append("difficulty_level")
+            
+        if module.estimated_duration != content.estimated_duration:
+            module.estimated_duration = content.estimated_duration
+            updated_fields.append("estimated_duration")
+        
+        db.commit()
+        db.refresh(module)
+        
+        return {
+            "status": "success",
+            "message": f"Module content updated successfully",
+            "module_id": module_id,
+            "title": module.title,
+            "fields_updated": updated_fields,
+            "updated_at": module.updated_at.isoformat(),
+            "total_changes": len(updated_fields)
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update module content: {str(e)}")
 
-@router.post("/modules/upload-content")
+@router.post("/modules/{module_id}/upload-content", response_model=ContentUploadResponse)
 async def upload_module_content(
+    module_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Upload module content from structured text file (Claude Projects style)
-    Supports bulk content updates with validation and error reporting
-    """
-    
-    # TODO: Add admin role check
-    # if not current_user.is_admin:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
-    if not file.filename.endswith(('.txt', '.md')):
-        raise HTTPException(status_code=400, detail="Only .txt and .md files are supported")
+    """Upload module content from text file (Claude Projects style)"""
     
     try:
-        # Read file content
+        # Validate file type
+        if not file.filename.endswith('.txt'):
+            raise HTTPException(status_code=400, detail="Only .txt files are supported")
+        
+        # Validate file size (max 1MB)
         content = await file.read()
+        if len(content) > 1024 * 1024:  # 1MB limit
+            raise HTTPException(status_code=400, detail="File too large (max 1MB)")
+        
         text_content = content.decode('utf-8')
         
-        # Parse content
-        parsed_modules = parse_structured_text_content(text_content)
+        # Parse content using structured format
+        parsed_content = parse_module_content_file(text_content)
         
-        if not parsed_modules:
-            raise HTTPException(status_code=400, detail="No valid module content found in file")
+        if not parsed_content:
+            raise HTTPException(status_code=400, detail="No valid content found in file. Please check the format.")
         
-        # Process each module
-        modules_updated = []
-        errors = []
-        warnings = []
+        # Get module
+        module = db.query(Module).filter(Module.id == module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
         
-        for module_data in parsed_modules:
-            try:
-                # Validate required fields
-                if not module_data.get("title"):
-                    errors.append(f"Module missing title: {module_data}")
-                    continue
-                
-                # Find existing module by title or create new
-                module = db.query(Module).filter(Module.title == module_data["title"]).first()
-                
-                if module:
-                    # Update existing module
-                    action = "updated"
-                else:
-                    # Create new module
-                    module = Module()
-                    action = "created"
-                    db.add(module)
-                
-                # Apply updates
-                module.title = module_data["title"]
-                module.description = module_data.get("description", "")
-                module.system_prompt = module_data.get("system_prompt", "")
-                module.module_prompt = module_data.get("module_prompt", "")
-                module.resources = module_data.get("resources", "")
-                module.difficulty_level = module_data.get("difficulty_level", "intermediate")
-                module.estimated_duration = module_data.get("estimated_duration", 45)
-                module.is_active = True
-                module.updated_at = datetime.utcnow()
-                
-                # Handle learning objectives
-                objectives = module_data.get("learning_objectives", [])
-                if isinstance(objectives, list):
-                    module.learning_objectives = json.dumps(objectives)
-                else:
-                    module.learning_objectives = json.dumps([objectives] if objectives else [])
-                
-                modules_updated.append({
-                    "id": module.id if hasattr(module, 'id') else "new",
-                    "title": module.title,
-                    "action": action
-                })
-                
-            except Exception as e:
-                errors.append(f"Error processing module '{module_data.get('title', 'unknown')}': {str(e)}")
+        # Track updated fields
+        fields_updated = []
         
-        if modules_updated:
-            db.commit()
+        # Apply parsed content to module
+        if 'title' in parsed_content and parsed_content['title'].strip():
+            module.title = parsed_content['title'].strip()
+            fields_updated.append('title')
             
-            # Refresh module IDs for new modules
-            for i, update_info in enumerate(modules_updated):
-                if update_info["id"] == "new":
-                    module = db.query(Module).filter(Module.title == update_info["title"]).first()
-                    if module:
-                        modules_updated[i]["id"] = module.id
+        if 'description' in parsed_content and parsed_content['description'].strip():
+            module.description = parsed_content['description'].strip()
+            fields_updated.append('description')
+            
+        if 'system_prompt' in parsed_content and parsed_content['system_prompt'].strip():
+            module.system_prompt = parsed_content['system_prompt'].strip()
+            fields_updated.append('system_prompt')
+            
+        if 'module_prompt' in parsed_content and parsed_content['module_prompt'].strip():
+            module.module_prompt = parsed_content['module_prompt'].strip()
+            fields_updated.append('module_prompt')
+            
+        if 'learning_objectives' in parsed_content and parsed_content['learning_objectives']:
+            module.learning_objectives = json.dumps(parsed_content['learning_objectives'])
+            fields_updated.append('learning_objectives')
+            
+        if 'resources' in parsed_content and parsed_content['resources'].strip():
+            module.resources = parsed_content['resources'].strip()
+            fields_updated.append('resources')
         
-        return FileUploadResult(
+        db.commit()
+        
+        return ContentUploadResponse(
+            status="success",
             filename=file.filename,
-            modules_processed=len(parsed_modules),
-            modules_updated=[info["id"] for info in modules_updated if info["id"] != "new"],
-            errors=errors,
-            warnings=warnings
+            module_id=module_id,
+            fields_updated=fields_updated,
+            message=f"Successfully uploaded {file.filename} and updated {len(fields_updated)} fields"
         )
         
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="File encoding not supported. Please use UTF-8.")
+        raise HTTPException(status_code=400, detail="File must be valid UTF-8 text")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-@router.get("/modules/export-all")
-async def export_all_modules(
-    format_config: ContentExportFormat = Depends(),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Export all modules in structured text format
-    Generates downloadable file in Claude Projects compatible format
-    """
-    
-    # TODO: Add admin role check
-    # if not current_user.is_admin:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
-    # Get all modules
-    modules = db.query(Module).filter(Module.is_active == True).order_by(Module.id).all()
-    
-    if not modules:
-        raise HTTPException(status_code=404, detail="No modules found")
-    
-    # Generate export content
-    export_content = generate_structured_export(modules, format_config)
-    
-    # Create temporary file
-    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    filename = f"harv_modules_export_{timestamp}.txt"
-    
-    # Write to temporary file and return
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt') as tmp_file:
-        tmp_file.write(export_content)
-        tmp_file_path = tmp_file.name
-    
-    return FileResponse(
-        path=tmp_file_path,
-        filename=filename,
-        media_type='text/plain',
-        background=None  # Don't delete immediately
-    )
-
-@router.get("/modules/{module_id}/export")
-async def export_single_module(
+@router.get("/modules/{module_id}/export-content", response_model=ContentExportResponse)
+async def export_module_content(
     module_id: int,
-    format_config: ContentExportFormat = Depends(),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Export single module in structured text format
-    """
+    """Export module content as structured text file (Claude Projects compatible)"""
     
-    # TODO: Add admin role check
-    # if not current_user.is_admin:
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
-    module = db.query(Module).filter(Module.id == module_id).first()
-    if not module:
-        raise HTTPException(status_code=404, detail="Module not found")
-    
-    # Generate export content
-    export_content = generate_structured_export([module], format_config)
-    
-    # Return as downloadable content
-    safe_title = "".join(c for c in module.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    filename = f"module_{module_id}_{safe_title.replace(' ', '_').lower()}.txt"
-    
-    return {
-        "content": export_content,
-        "filename": filename,
-        "module_title": module.title,
-        "generated_at": datetime.utcnow().isoformat()
-    }
+    try:
+        module = db.query(Module).filter(Module.id == module_id).first()
+        if not module:
+            raise HTTPException(status_code=404, detail="Module not found")
+        
+        # Parse objectives
+        objectives = json.loads(module.learning_objectives) if module.learning_objectives else []
+        
+        # Create structured export content
+        export_content = f"""# TITLE: {module.title or 'Untitled Module'}
+# DESCRIPTION: {module.description or 'No description provided'}
 
-@router.get("/content-editor/templates")
-async def get_content_templates():
-    """
-    Get content templates for the editor
-    Provides examples and starting templates for new modules
-    """
+# SYSTEM_PROMPT:
+{module.system_prompt or 'No system prompt defined'}
+# END
+
+# MODULE_PROMPT:
+{module.module_prompt or 'No module prompt defined'}
+# END
+
+# LEARNING_OBJECTIVES:
+{chr(10).join(f"- {obj}" for obj in objectives) if objectives else "- No objectives defined"}
+# END
+
+# RESOURCES:
+{module.resources or 'No additional resources'}
+# END
+
+# METADATA:
+# Difficulty Level: {module.difficulty_level}
+# Estimated Duration: {module.estimated_duration} minutes
+# Module ID: {module.id}
+# Last Updated: {module.updated_at.isoformat() if module.updated_at else 'Never'}
+# END
+"""
+        
+        # Create safe filename
+        safe_title = re.sub(r'[^\w\s-]', '', module.title).strip()
+        safe_title = re.sub(r'[-\s]+', '_', safe_title).lower()
+        filename = f"module_{module_id}_{safe_title}.txt"
+        
+        return ContentExportResponse(
+            content=export_content,
+            filename=filename
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+@router.get("/modules/bulk-export")
+async def bulk_export_modules(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Export all modules as structured text files in a ZIP-like format"""
     
-    templates = {
-        "basic_module": {
-            "title": "New Communication Module",
-            "description": "A foundational module covering key communication concepts",
-            "system_prompt": """You are an expert communication theory tutor using Socratic methodology. Your role is to guide students to discover concepts through strategic questioning.
+    try:
+        modules = db.query(Module).filter(Module.is_active == True).all()
+        
+        exports = []
+        for module in modules:
+            objectives = json.loads(module.learning_objectives) if module.learning_objectives else []
+            
+            content = f"""# TITLE: {module.title or 'Untitled Module'}
+# DESCRIPTION: {module.description or 'No description provided'}
+
+# SYSTEM_PROMPT:
+{module.system_prompt or 'No system prompt defined'}
+# END
+
+# MODULE_PROMPT:
+{module.module_prompt or 'No module prompt defined'}
+# END
+
+# LEARNING_OBJECTIVES:
+{chr(10).join(f"- {obj}" for obj in objectives) if objectives else "- No objectives defined"}
+# END
+
+# RESOURCES:
+{module.resources or 'No additional resources'}
+# END
+"""
+            
+            safe_title = re.sub(r'[^\w\s-]', '', module.title).strip()
+            safe_title = re.sub(r'[-\s]+', '_', safe_title).lower()
+            filename = f"module_{module.id}_{safe_title}.txt"
+            
+            exports.append({
+                "filename": filename,
+                "content": content,
+                "module_id": module.id,
+                "title": module.title
+            })
+        
+        return {
+            "status": "success",
+            "total_modules": len(exports),
+            "exports": exports,
+            "message": f"Successfully exported {len(exports)} modules"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Bulk export failed: {str(e)}")
+
+def parse_module_content_file(content: str) -> Dict[str, Any]:
+    """Parse structured text file for module content (Claude Projects style format)"""
+    lines = content.strip().split('\n')
+    parsed = {}
+    current_section = None
+    current_content = []
+    
+    for line in lines:
+        line = line.rstrip()  # Remove trailing whitespace
+        
+        # Check for section headers
+        if line.startswith('# TITLE:'):
+            parsed['title'] = line.replace('# TITLE:', '').strip()
+        elif line.startswith('# DESCRIPTION:'):
+            parsed['description'] = line.replace('# DESCRIPTION:', '').strip()
+        elif line.startswith('# SYSTEM_PROMPT:'):
+            current_section = 'system_prompt'
+            current_content = []
+        elif line.startswith('# MODULE_PROMPT:'):
+            current_section = 'module_prompt'
+            current_content = []
+        elif line.startswith('# LEARNING_OBJECTIVES:'):
+            current_section = 'learning_objectives'
+            current_content = []
+        elif line.startswith('# RESOURCES:'):
+            current_section = 'resources'
+            current_content = []
+        elif line.startswith('# END') or line.strip() == '#':
+            # End of section - process accumulated content
+            if current_section and current_content:
+                if current_section == 'learning_objectives':
+                    # Parse as list (one objective per line, remove bullets)
+                    objectives = []
+                    for obj_line in current_content:
+                        clean_obj = obj_line.strip().lstrip('- •*').strip()
+                        if clean_obj:
+                            objectives.append(clean_obj)
+                    parsed[current_section] = objectives
+                else:
+                    # Parse as text block
+                    parsed[current_section] = '\n'.join(current_content).strip()
+            current_section = None
+            current_content = []
+        elif line.startswith('# METADATA:') or line.startswith('# Difficulty') or line.startswith('# Estimated') or line.startswith('# Module ID') or line.startswith('# Last Updated'):
+            # Skip metadata lines
+            continue
+        else:
+            # Content line - add to current section if we're in one
+            if current_section:
+                current_content.append(line)
+    
+    # Handle case where file ends without # END
+    if current_section and current_content:
+        if current_section == 'learning_objectives':
+            objectives = []
+            for obj_line in current_content:
+                clean_obj = obj_line.strip().lstrip('- •*').strip()
+                if clean_obj:
+                    objectives.append(clean_obj)
+            parsed[current_section] = objectives
+        else:
+            parsed[current_section] = '\n'.join(current_content).strip()
+    
+    return parsed
+
+@router.get("/content-format-guide")
+async def get_content_format_guide():
+    """Get the format guide for uploading module content"""
+    
+    format_example = """# TITLE: Your Four Worlds
+# DESCRIPTION: Communication models, perception, and the four worlds we live in
+
+# SYSTEM_PROMPT:
+You are an expert communication theory tutor using Socratic methodology. Your role is to guide students to discover concepts about perception, communication models, and the four worlds concept through strategic questioning.
 
 CORE PRINCIPLES:
 - Never give direct answers - help students discover insights themselves
 - Ask probing questions that lead to breakthrough moments
 - Build on student's prior knowledge and experiences
 - Use real-world examples they can relate to
-- Encourage critical thinking about communication
+# END
 
-SOCRATIC STRATEGY:
-- Start with student's personal experiences
-- Ask "why" and "how" questions
-- Help them connect concepts to their own life
-- Guide them to see patterns and principles
-- Celebrate their discoveries and insights""",
-            "module_prompt": """Help students understand [TOPIC FOCUS]. Guide them to discover:
+# MODULE_PROMPT:
+Help students understand how different perceptual worlds create different communication realities. Focus on:
 
-1. [Key concept 1]
-2. [Key concept 2]
-3. [Key concept 3]
+1. The difference between being a passive receiver vs active participant in communication
+2. How we all live in multiple worlds simultaneously 
+3. The role of perception in shaping our communication experiences
+4. How scripts and mental models influence understanding
 
-Ask them to consider examples from their daily life where they've experienced these concepts. Guide them to discover how [main insight].""",
-            "learning_objectives": [
-                "Understand key concept through personal discovery",
-                "Apply learning to real-world situations",
-                "Make connections to other communication principles"
-            ],
-            "difficulty_level": "intermediate",
-            "estimated_duration": 45
-        },
-        "advanced_module": {
-            "title": "Advanced Communication Analysis",
-            "description": "Deep exploration of complex communication phenomena",
-            "system_prompt": """You are guiding an advanced student through complex communication analysis. Push them to think critically and make sophisticated connections.
+Ask them to consider examples from their daily life where they've experienced these different worlds.
+# END
 
-ADVANCED APPROACH:
-- Challenge assumptions and conventional wisdom
-- Encourage multi-perspective analysis
-- Push for deeper "why" questions
-- Connect to broader theoretical frameworks
-- Demand evidence-based reasoning""",
-            "module_prompt": """Challenge students to analyze [ADVANCED TOPIC] from multiple theoretical perspectives. Guide discovery of:
+# LEARNING_OBJECTIVES:
+- Differentiate between communication receiver and participant
+- Describe the four worlds in which each of us lives
+- Explain communication models and their value
+- Explain what perception is and how it affects communication
+- Describe how scripts help understand media messages
+# END
 
-1. [Complex concept 1]
-2. [Theoretical framework application]
-3. [Critical analysis skills]
+# RESOURCES:
+Additional readings: McLuhan's Understanding Media (selected chapters), Berlo's SMCR Model, Shannon-Weaver Communication Model diagrams
+# END
+"""
 
-Push them to question assumptions and provide evidence for their insights.""",
-            "learning_objectives": [
-                "Critically analyze complex communication phenomena",
-                "Apply multiple theoretical frameworks",
-                "Develop evidence-based reasoning skills",
-                "Challenge conventional communication assumptions"
-            ],
-            "difficulty_level": "advanced",
-            "estimated_duration": 60
-        }
-    }
-    
     return {
-        "templates": templates,
-        "usage_guide": {
-            "basic_module": "Use for introductory topics with foundational concepts",
-            "advanced_module": "Use for complex topics requiring critical thinking",
-            "customization_tips": [
-                "Replace [TOPIC FOCUS] with your specific subject matter",
-                "Adjust learning objectives to match your content goals",
-                "Modify system prompts to match teaching style",
-                "Set appropriate difficulty level and duration"
-            ]
-        }
+        "format_guide": {
+            "description": "Upload structured text files to update module content",
+            "supported_sections": [
+                "TITLE: Module title",
+                "DESCRIPTION: Brief module description", 
+                "SYSTEM_PROMPT: Core AI tutor instructions",
+                "MODULE_PROMPT: Module-specific guidance",
+                "LEARNING_OBJECTIVES: List of learning goals (one per line with - prefix)",
+                "RESOURCES: Additional materials and references"
+            ],
+            "format_rules": [
+                "Each section starts with # SECTION_NAME:",
+                "Content sections end with # END",
+                "Learning objectives should be bulleted with - prefix",
+                "Use plain text format, UTF-8 encoding",
+                "Maximum file size: 1MB"
+            ],
+            "example": format_example
+        },
+        "upload_endpoint": "/admin/modules/{module_id}/upload-content",
+        "export_endpoint": "/admin/modules/{module_id}/export-content"
     }
-
-@router.post("/content-editor/validate")
-async def validate_module_content(
-    content: ModuleContentUpdate,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Validate module content before saving
-    Provides real-time validation feedback for the content editor
-    """
-    
-    validation_results = {
-        "valid": True,
-        "errors": [],
-        "warnings": [],
-        "suggestions": []
-    }
-    
-    # Required field validation
-    if not content.title.strip():
-        validation_results["errors"].append("Title is required")
-        validation_results["valid"] = False
-        
-    if not content.description.strip():
-        validation_results["errors"].append("Description is required")
-        validation_results["valid"] = False
-        
-    if not content.system_prompt.strip():
-        validation_results["warnings"].append("System prompt is empty - students won't get personalized guidance")
-        
-    if not content.learning_objectives:
-        validation_results["warnings"].append("No learning objectives defined - progress tracking will be limited")
-    
-    # Content quality checks
-    if len(content.title) > 100:
-        validation_results["warnings"].append("Title is very long - consider shortening for better display")
-        
-    if len(content.description) < 50:
-        validation_results["warnings"].append("Description is quite short - consider adding more detail")
-        
-    if content.system_prompt and len(content.system_prompt) < 100:
-        validation_results["warnings"].append("System prompt is short - consider adding more teaching guidance")
-        
-    # Socratic methodology checks
-    if content.system_prompt:
-        socratic_keywords = ["question", "discover", "guide", "socratic", "why", "how"]
-        if not any(keyword in content.system_prompt.lower() for keyword in socratic_keywords):
-            validation_results["suggestions"].append("Consider adding Socratic questioning guidance to the system prompt")
-            
-        if "answer" in content.system_prompt.lower() and "don't" not in content.system_prompt.lower():
-            validation_results["warnings"].append("System prompt might encourage direct answers instead of discovery")
-    
-    # Learning objectives validation
-    if len(content.learning_objectives) > 7:
-        validation_results["warnings"].append("Many learning objectives - consider focusing on 3-5 key goals")
-        
-    for i, objective in enumerate(content.learning_objectives):
-        if len(objective.strip()) < 10:
-            validation_results["warnings"].append(f"Objective {i+1} is very short - be more specific")
-            
-    # Duration validation
-    if content.estimated_duration < 15:
-        validation_results["warnings"].append("Very short estimated duration - ensure sufficient learning time")
-    elif content.estimated_duration > 120:
-        validation_results["warnings"].append("Very long estimated duration - consider breaking into smaller modules")
-    
-    return validation_results
