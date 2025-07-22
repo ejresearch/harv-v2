@@ -1,6 +1,6 @@
+# backend/app/core/config.py
 """
-Core configuration for Harv v2.0
-Clean, production-ready settings management
+Configuration with OpenAI integration
 """
 
 from pydantic_settings import BaseSettings
@@ -17,16 +17,18 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./harv_v2.db"
 
     # Security
-    secret_key: str = secrets.token_urlsafe(32)  # Auto-generate if not provided
+    secret_key: str = secrets.token_urlsafe(32)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
 
-    # OpenAI
+    # OpenAI Configuration - REQUIRED for real responses
     openai_api_key: Optional[str] = None
-    openai_model: str = "gpt-4"
+    openai_model: str = "gpt-4-turbo-preview"  # or "gpt-4" or "gpt-3.5-turbo"
+    openai_max_tokens: int = 400
+    openai_temperature: float = 0.7
     
     # CORS - Allow frontend access
-    cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: List[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]
     
     # API Settings
     api_prefix: str = "/api/v1"
@@ -38,6 +40,7 @@ class Settings(BaseSettings):
     # Socratic Teaching Settings
     socratic_mode_enabled: bool = True
     prevent_direct_answers: bool = True
+    socratic_effectiveness_threshold: float = 0.7
 
     class Config:
         env_file = ".env"
