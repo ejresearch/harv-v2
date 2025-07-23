@@ -1,48 +1,20 @@
 """
-Course and module models - FIXED VERSION
-Your 15 communication modules with Socratic configuration + Document Intelligence
+ADD THESE FIELDS TO YOUR backend/app/models/course.py Module class
+
+Find your existing Module class and add these imports at the top:
 """
 
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
-from sqlalchemy.orm import relationship
-from typing import Dict, List
-from datetime import datetime
-import json
+# Add these imports to the TOP of your course.py file:
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime  # Add DateTime
+from typing import Dict, List  # Add these
+from datetime import datetime  # Add this
+import json  # Add this
 
-from .base import Base, TimestampMixin
-
+# Then add these fields to your existing Module class:
 class Module(Base, TimestampMixin):
-    """
-    Learning module model
-    Contains your 15 communication modules with Socratic prompts + Document Intelligence
-    """
-    __tablename__ = "modules"
+    # ... ALL YOUR EXISTING FIELDS ...
     
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    description = Column(Text)
-    
-    # Socratic teaching configuration
-    system_prompt = Column(Text, nullable=False)  # Core Socratic instructions
-    module_prompt = Column(Text)  # Module-specific guidance
-    learning_objectives = Column(Text)  # What students should discover
-    
-    # Content and resources
-    resources = Column(Text)  # Additional learning materials
-    system_corpus = Column(Text)  # Background knowledge
-    module_corpus = Column(Text)  # Module-specific knowledge
-    dynamic_corpus = Column(Text)  # Adaptive content
-    
-    # Configuration
-    difficulty_level = Column(String, default="intermediate")
-    estimated_duration = Column(Integer)  # Minutes
-    prerequisites = Column(Text)  # JSON list of required modules
-    is_active = Column(Boolean, default=True)
-    
-    # API configuration (for future extensibility)
-    api_endpoint = Column(String, default="https://api.openai.com/v1/chat/completions")
-    
-    # NEW: Document Intelligence Fields
+    # NEW: Add these fields at the end of your existing fields
     source_document_path = Column(String, nullable=True)
     source_document_name = Column(String, nullable=True)
     source_document_type = Column(String, nullable=True)
@@ -52,12 +24,7 @@ class Module(Base, TimestampMixin):
     socratic_questions = Column(Text, nullable=True)
     document_summary = Column(Text, nullable=True)
     
-    # Relationships
-    conversations = relationship("Conversation", back_populates="module")
-    memory_summaries = relationship("MemorySummary", back_populates="module")
-    progress_records = relationship("UserProgress", back_populates="module")
-    
-    # NEW: Document Intelligence Methods
+    # NEW: Add these methods at the end of your Module class
     def has_document_intelligence(self) -> bool:
         """Check if this module has document intelligence available"""
         return bool(self.extracted_concepts and self.extracted_examples)
@@ -100,14 +67,5 @@ class Module(Base, TimestampMixin):
             "examples_count": len(self.get_document_examples()),
             "questions_available": bool(self.socratic_questions)
         }
-    
-    def clear_document_intelligence(self) -> None:
-        """Remove all document intelligence data"""
-        self.source_document_path = None
-        self.source_document_name = None
-        self.source_document_type = None
-        self.document_processed_at = None
-        self.extracted_concepts = None
-        self.extracted_examples = None
-        self.socratic_questions = None
-        self.document_summary = None
+
+# MANUAL STEP: You need to manually add these to your actual course.py file
