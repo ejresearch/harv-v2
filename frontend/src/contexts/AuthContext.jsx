@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -10,34 +9,67 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
+    const savedUser = localStorage.getItem('user_data');
     const role = localStorage.getItem('user_role');
     
-    if (token && role) {
-      setUserRole(role);
-      // In real app, verify token with backend
-      setUser({ email: 'demo@harv.com', role });
+    if (token && savedUser) {
+      const userData = JSON.parse(savedUser);
+      setUser(userData);
+      setUserRole(role || 'student');
     }
     setLoading(false);
   }, []);
 
   const login = async (credentials) => {
     try {
-      const response = await api.login(credentials);
-      localStorage.setItem('auth_token', response.access_token);
-      localStorage.setItem('user_role', response.role);
-      api.token = response.access_token;
-      setUser(response.user);
-      setUserRole(response.role);
-      return response;
+      // Call your API
+      const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials)
+      });
+
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+
+      const data = await response.json();
+      
+      // Extract user data from the response
+      const userData = {
+        id: data.user_id,
+        name: data.name,
+        email: data.email
+      };
+
+      // Determine role from email (demo logic)
+      let role = 'student';
+      if (data.email?.includes('teacher')) role = 'educator';
+      if (data.email?.includes('admin')) role = 'admin';
+      if (data.email?.includes('demo@harv.com')) role = 'universal';
+
+      // Save to localStorage
+      localStorage.setItem('auth_token', data.access_token);
+      localStorage.setItem('user_data', JSON.stringify(userData));
+      localStorage.setItem('user_role', role);
+
+      // Update state
+      setUser(userData);
+      setUserRole(role);
+
+      return data;
     } catch (error) {
+      console.error('Login error:', error);
       throw error;
     }
   };
 
   const logout = () => {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('user_data');
     localStorage.removeItem('user_role');
-    api.token = null;
     setUser(null);
     setUserRole(null);
   };
