@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Dashboard() {
   const { user, userRole } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState(null);
 
   useEffect(() => {
-    // Simulate loading dashboard data
     setTimeout(() => {
       setDashboardData({
         student: {
@@ -27,158 +27,192 @@ export default function Dashboard() {
             { type: 'chat', description: 'Had a discussion about media theory', time: '1 day ago' },
             { type: 'progress', description: 'Made progress in "Shared Characteristics"', time: '2 days ago' }
           ]
-        },
-        teacher: {
-          totalStudents: 24,
-          activeStudents: 18,
-          averageProgress: 62,
-          completionRate: 75
-        },
-        admin: {
-          totalUsers: 156,
-          systemUptime: '99.9%',
-          apiCalls: 2847,
-          activeCoursesCount: 1
         }
       });
       setLoading(false);
-    }, 1000);
+    }, 800);
   }, []);
 
   if (loading) {
     return <DashboardSkeleton />;
   }
 
-  // Route to appropriate dashboard based on role
-  if (userRole === 'educator') {
-    return <TeacherDashboardContent data={dashboardData.teacher} user={user} />;
-  }
-
-  if (userRole === 'admin') {
-    return <AdminDashboardContent data={dashboardData.admin} user={user} />;
-  }
-
-  // Default to student dashboard for 'student' and 'universal' roles
-  return <StudentDashboardContent data={dashboardData.student} user={user} userRole={userRole} />;
+  return <StudentDashboardContent data={dashboardData.student} user={user} userRole={userRole} navigate={navigate} />;
 }
 
-// Student Dashboard Component
-const StudentDashboardContent = ({ data, user, userRole }) => {
+const StudentDashboardContent = ({ data, user, userRole, navigate }) => {
   return (
-    <div className="space-y-6">
-      {/* Welcome Section */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Welcome Header */}
+      <div className="miranda-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            <h1 className="miranda-title">
               Welcome back, {user?.name}! 👋
             </h1>
-            <p className="text-gray-600">
+            <p className="miranda-subtitle">
               Ready to continue your Mass Communication journey?
             </p>
           </div>
           {userRole === 'universal' && (
-            <div className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+            <div style={{
+              background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+              color: 'white',
+              padding: '0.5rem 1rem',
+              borderRadius: '20px',
+              fontSize: '0.85rem',
+              fontWeight: '600'
+            }}>
               🔄 Universal Access
             </div>
           )}
         </div>
       </div>
 
-      {/* Progress Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard
-          title="Overall Progress"
-          value={`${data.overallProgress}%`}
-          icon="📊"
-          color="blue"
-          subtitle={`${data.completedModules}/${data.totalModules} modules`}
-        />
-        <StatCard
-          title="Chat Sessions"
-          value={data.chatSessions}
-          icon="💬"
-          color="green"
-          subtitle="with AI tutor"
-        />
-        <StatCard
-          title="Insights Gained"
-          value={data.insightsGained}
-          icon="💡"
-          color="purple"
-          subtitle="learning moments"
-        />
-        <StatCard
-          title="Current Module"
-          value={data.currentModule.progress + '%'}
-          icon="📚"
-          color="orange"
-          subtitle={data.currentModule.title}
-        />
+      {/* Stats Grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+        gap: '1.5rem'
+      }}>
+        <div 
+          className="miranda-stat-card"
+          onClick={() => navigate('/progress')}
+        >
+          <div className="miranda-stat-value">{data.overallProgress}%</div>
+          <div className="miranda-stat-label">Overall Progress</div>
+          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            {data.completedModules}/{data.totalModules} modules
+          </div>
+        </div>
+
+        <div 
+          className="miranda-stat-card"
+          onClick={() => navigate('/chat')}
+        >
+          <div className="miranda-stat-value">{data.chatSessions}</div>
+          <div className="miranda-stat-label">Chat Sessions</div>
+          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            with AI tutor
+          </div>
+        </div>
+
+        <div className="miranda-stat-card">
+          <div className="miranda-stat-value">{data.insightsGained}</div>
+          <div className="miranda-stat-label">Insights Gained</div>
+          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            learning moments
+          </div>
+        </div>
+
+        <div 
+          className="miranda-stat-card"
+          onClick={() => navigate(`/modules/${data.currentModule.id}`)}
+        >
+          <div className="miranda-stat-value">{data.currentModule.progress}%</div>
+          <div className="miranda-stat-label">Current Module</div>
+          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+            {data.currentModule.title}
+          </div>
+        </div>
       </div>
 
       {/* Current Module Progress */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Continue Learning</h2>
-          <Link
-            to={`/modules/${data.currentModule.id}`}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+      <div className="miranda-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+            Continue Learning
+          </h2>
+          <button
+            onClick={() => navigate(`/modules/${data.currentModule.id}`)}
+            className="miranda-button secondary"
           >
             View Module →
-          </Link>
+          </button>
         </div>
         
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-              <span className="text-2xl">📡</span>
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05))',
+          borderRadius: '16px',
+          padding: '1.5rem',
+          border: '1px solid rgba(59, 130, 246, 0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.5rem'
+            }}>
+              📡
             </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-800">{data.currentModule.title}</h3>
-              <p className="text-sm text-gray-600 mb-2">
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontSize: '1.2rem', fontWeight: '600', color: '#1e293b', marginBottom: '0.5rem' }}>
+                {data.currentModule.title}
+              </h3>
+              <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.95rem' }}>
                 Understanding how communication systems work
               </p>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="miranda-progress-bar">
                 <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                  className="miranda-progress-fill"
                   style={{ width: `${data.currentModule.progress}%` }}
                 ></div>
               </div>
-              <p className="text-xs text-gray-500 mt-1">{data.currentModule.progress}% complete</p>
+              <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem' }}>
+                {data.currentModule.progress}% complete
+              </p>
             </div>
-            <Link
-              to={`/modules/${data.currentModule.id}`}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            <button
+              onClick={() => navigate(`/modules/${data.currentModule.id}`)}
+              className="miranda-button"
             >
               Continue
-            </Link>
+            </button>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '1.5rem'
+      }}>
         <QuickActionCard
           title="Chat with AI Tutor"
           description="Ask questions about communication theory and get Socratic guidance"
           icon="🤖"
-          action={() => window.location.href = '/chat'}
-          gradient="from-green-500 to-teal-600"
+          action={() => navigate('/chat')}
+          gradient="linear-gradient(135deg, #10b981, #059669)"
         />
         <QuickActionCard
           title="View All Modules"
           description="Browse through all 15 Mass Communication modules"
           icon="📚"
-          action={() => window.location.href = '/modules/1'}
-          gradient="from-purple-500 to-pink-600"
+          action={() => navigate('/modules/1')}
+          gradient="linear-gradient(135deg, #8b5cf6, #ec4899)"
         />
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">Recent Activity</h2>
-        <div className="space-y-3">
+      <div className="miranda-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+            Recent Activity
+          </h2>
+          <button
+            onClick={() => navigate('/progress')}
+            className="miranda-button secondary"
+          >
+            View Full Progress →
+          </button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {data.recentActivity.map((activity, index) => (
             <ActivityItem key={index} {...activity} />
           ))}
@@ -188,159 +222,38 @@ const StudentDashboardContent = ({ data, user, userRole }) => {
   );
 };
 
-// Teacher Dashboard Content
-const TeacherDashboardContent = ({ data, user }) => {
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          Teacher Dashboard
-        </h1>
-        <p className="text-gray-600">
-          Welcome, {user?.name}! Here's your class overview.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Students"
-          value={data.totalStudents}
-          icon="👥"
-          color="blue"
-        />
-        <StatCard
-          title="Active Students"
-          value={data.activeStudents}
-          icon="🟢"
-          color="green"
-        />
-        <StatCard
-          title="Average Progress"
-          value={`${data.averageProgress}%`}
-          icon="📈"
-          color="purple"
-        />
-        <StatCard
-          title="Completion Rate"
-          value={`${data.completionRate}%`}
-          icon="✅"
-          color="orange"
-        />
-      </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Class Management</h3>
-        <p className="text-gray-600">Full teacher features coming soon...</p>
-      </div>
-    </div>
-  );
-};
-
-// Admin Dashboard Content
-const AdminDashboardContent = ({ data, user }) => {
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-800 mb-2">
-          System Administration
-        </h1>
-        <p className="text-gray-600">
-          Welcome, {user?.name}! System status overview.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <StatCard
-          title="Total Users"
-          value={data.totalUsers}
-          icon="👤"
-          color="blue"
-        />
-        <StatCard
-          title="System Uptime"
-          value={data.systemUptime}
-          icon="⚡"
-          color="green"
-        />
-        <StatCard
-          title="API Calls"
-          value={data.apiCalls.toLocaleString()}
-          icon="🔗"
-          color="purple"
-        />
-        <StatCard
-          title="Active Courses"
-          value={data.activeCoursesCount}
-          icon="📚"
-          color="orange"
-        />
-      </div>
-
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">System Health</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-sm font-medium">Database</span>
-            <span className="flex items-center text-sm text-green-600">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              Healthy
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-sm font-medium">API Services</span>
-            <span className="flex items-center text-sm text-green-600">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              Online
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-            <span className="text-sm font-medium">AI Services</span>
-            <span className="flex items-center text-sm text-green-600">
-              <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-              Active
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Reusable Components
-const StatCard = ({ title, value, icon, color, subtitle }) => {
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-600 border-blue-200',
-    green: 'bg-green-50 text-green-600 border-green-200',
-    purple: 'bg-purple-50 text-purple-600 border-purple-200',
-    orange: 'bg-orange-50 text-orange-600 border-orange-200'
-  };
-
-  return (
-    <div className="bg-white rounded-lg shadow p-6">
-      <div className="flex items-center">
-        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
-          <span className="text-2xl">{icon}</span>
-        </div>
-        <div className="ml-4">
-          <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-          {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const QuickActionCard = ({ title, description, icon, action, gradient }) => {
   return (
-    <div className={`bg-gradient-to-r ${gradient} rounded-lg p-6 text-white cursor-pointer transform hover:scale-105 transition-transform`}
-         onClick={action}>
-      <div className="flex items-center space-x-4">
-        <span className="text-3xl">{icon}</span>
-        <div>
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <p className="text-sm opacity-90">{description}</p>
-        </div>
+    <div
+      onClick={action}
+      style={{
+        background: gradient,
+        borderRadius: '16px',
+        padding: '1.5rem',
+        color: 'white',
+        cursor: 'pointer',
+        transition: 'all 0.3s ease',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1rem'
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.transform = 'translateY(-4px)';
+        e.target.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.2)';
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.transform = 'translateY(0)';
+        e.target.style.boxShadow = 'none';
+      }}
+    >
+      <span style={{ fontSize: '2rem' }}>{icon}</span>
+      <div>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+          {title}
+        </h3>
+        <p style={{ opacity: 0.9, fontSize: '0.9rem' }}>
+          {description}
+        </p>
       </div>
     </div>
   );
@@ -354,11 +267,34 @@ const ActivityItem = ({ type, description, time }) => {
   };
 
   return (
-    <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-      <span className="text-lg">{icons[type] || '📝'}</span>
-      <div className="flex-1">
-        <p className="text-sm font-medium text-gray-800">{description}</p>
-        <p className="text-xs text-gray-500">{time}</p>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem',
+      padding: '1rem',
+      background: 'rgba(248, 250, 252, 0.8)',
+      borderRadius: '12px',
+      border: '1px solid rgba(226, 232, 240, 0.8)'
+    }}>
+      <div style={{
+        width: '40px',
+        height: '40px',
+        borderRadius: '10px',
+        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1))',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '1.2rem'
+      }}>
+        {icons[type] || '📝'}
+      </div>
+      <div style={{ flex: 1 }}>
+        <p style={{ fontWeight: '500', color: '#1e293b', marginBottom: '0.25rem' }}>
+          {description}
+        </p>
+        <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+          {time}
+        </p>
       </div>
     </div>
   );
@@ -366,23 +302,28 @@ const ActivityItem = ({ type, description, time }) => {
 
 const DashboardSkeleton = () => {
   return (
-    <div className="space-y-6 animate-pulse">
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="h-8 bg-gray-200 rounded w-1/3 mb-2"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="bg-white rounded-lg shadow p-6">
-            <div className="h-16 bg-gray-200 rounded"></div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="h-32 bg-gray-200 rounded"></div>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {[1, 2, 3].map(i => (
+        <div key={i} className="miranda-card" style={{ opacity: 0.6 }}>
+          <div style={{
+            height: '120px',
+            background: 'linear-gradient(90deg, rgba(226, 232, 240, 0.8) 25%, rgba(255, 255, 255, 0.8) 50%, rgba(226, 232, 240, 0.8) 75%)',
+            borderRadius: '12px',
+            backgroundSize: '200% 100%',
+            animation: 'shimmer 2s infinite'
+          }}></div>
+        </div>
+      ))}
     </div>
   );
 };
+
+// Add shimmer animation
+const shimmerStyle = document.createElement('style');
+shimmerStyle.textContent = `
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+`;
+document.head.appendChild(shimmerStyle);

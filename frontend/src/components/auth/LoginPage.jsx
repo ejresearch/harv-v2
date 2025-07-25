@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 export const LoginPage = () => {
   const [credentials, setCredentials] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+  const navigate = useNavigate();
+
+  // If user is already logged in, redirect to dashboard
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -13,8 +22,12 @@ export const LoginPage = () => {
     setError('');
 
     try {
+      console.log('🔐 Starting login process...');
       await login(credentials);
+      console.log('✅ Login successful, navigating to dashboard...');
+      navigate('/dashboard');
     } catch (error) {
+      console.error('❌ Login failed:', error);
       setError('Invalid credentials. Please try again.');
     } finally {
       setLoading(false);
@@ -24,6 +37,11 @@ export const LoginPage = () => {
   const handleDemoClick = (email, password) => {
     setCredentials({ email, password });
   };
+
+  // If already logged in, show redirect
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div style={{ 
@@ -71,19 +89,37 @@ export const LoginPage = () => {
           }}>
             <span style={{ fontSize: '3rem', fontWeight: 'bold' }}>H</span>
           </div>
-          <h1 style={{ fontSize: '3.5rem', fontWeight: 'bold', margin: '0 0 1rem', letterSpacing: '-0.02em' }}>
+          <h1 style={{ 
+            fontSize: '2.5rem', 
+            fontWeight: 'bold', 
+            marginBottom: '1rem',
+            textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+          }}>
             Harv v2.0
           </h1>
-          <p style={{ fontSize: '1.25rem', margin: '0 0 3rem', opacity: 0.9, lineHeight: 1.6 }}>
-            Introduction to Mass Communication
+          <p style={{ 
+            fontSize: '1.2rem', 
+            opacity: '0.9',
+            lineHeight: '1.6',
+            maxWidth: '300px'
+          }}>
+            Intelligent Tutoring System for Mass Communication
           </p>
-          <div style={{ fontSize: '1rem', opacity: 0.8, lineHeight: 1.6 }}>
-            <p style={{ margin: '0 0 1rem' }}>🎓 15 comprehensive modules</p>
-            <p style={{ margin: '0 0 1rem' }}>🤖 Socratic AI methodology</p>
-            <p style={{ margin: '0' }}>📊 Advanced learning analytics</p>
+          <div style={{ 
+            marginTop: '2rem',
+            padding: '1rem',
+            background: 'rgba(255,255,255,0.1)',
+            borderRadius: '12px',
+            backdropFilter: 'blur(10px)'
+          }}>
+            <p style={{ fontSize: '0.9rem', opacity: '0.8' }}>
+              ✨ Socratic AI Learning<br/>
+              📚 15 Course Modules<br/>
+              🎓 Role-based Access
+            </p>
           </div>
         </div>
-
+        
         {/* Right Side - Login Form */}
         <div style={{ 
           flex: '1',
@@ -92,26 +128,33 @@ export const LoginPage = () => {
           flexDirection: 'column',
           justifyContent: 'center'
         }}>
-          <div style={{ maxWidth: '400px', width: '100%', margin: '0 auto' }}>
-            
-            <div style={{ marginBottom: '3rem', textAlign: 'center' }}>
-              <h2 style={{ fontSize: '2rem', fontWeight: 'bold', color: '#1f2937', margin: '0 0 0.5rem' }}>
-                Welcome Back
-              </h2>
-              <p style={{ color: '#6b7280', margin: 0, fontSize: '1.1rem' }}>
-                Sign in to continue your learning journey
-              </p>
-            </div>
+          <div style={{ maxWidth: '400px', width: '100%' }}>
+            <h2 style={{ 
+              fontSize: '2rem', 
+              fontWeight: 'bold', 
+              color: '#1f2937',
+              marginBottom: '0.5rem',
+              textAlign: 'center'
+            }}>
+              Welcome Back
+            </h2>
+            <p style={{ 
+              color: '#6b7280', 
+              textAlign: 'center', 
+              marginBottom: '2rem',
+              fontSize: '1.1rem'
+            }}>
+              Sign in to continue your learning journey
+            </p>
 
-            {/* Login Form */}
-            <form onSubmit={handleLogin} style={{ marginBottom: '2rem' }}>
+            <form onSubmit={handleLogin} style={{ marginBottom: '1.5rem' }}>
               <div style={{ marginBottom: '1.5rem' }}>
                 <label style={{ 
                   display: 'block', 
                   fontSize: '1rem', 
                   fontWeight: '600', 
-                  color: '#374151', 
-                  marginBottom: '0.75rem' 
+                  color: '#374151',
+                  marginBottom: '0.5rem'
                 }}>
                   Email Address
                 </label>
@@ -128,7 +171,7 @@ export const LoginPage = () => {
                     transition: 'border-color 0.2s',
                     outline: 'none'
                   }}
-                  placeholder="Enter your email address"
+                  placeholder="Enter your email"
                   required
                   onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
                   onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
@@ -140,8 +183,8 @@ export const LoginPage = () => {
                   display: 'block', 
                   fontSize: '1rem', 
                   fontWeight: '600', 
-                  color: '#374151', 
-                  marginBottom: '0.75rem' 
+                  color: '#374151',
+                  marginBottom: '0.5rem'
                 }}>
                   Password
                 </label>
@@ -184,7 +227,7 @@ export const LoginPage = () => {
                 disabled={loading}
                 style={{ 
                   width: '100%',
-                  background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+                  background: loading ? '#9ca3af' : 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                   color: 'white',
                   padding: '1rem 1.25rem',
                   borderRadius: '12px',
@@ -199,7 +242,7 @@ export const LoginPage = () => {
                 onMouseEnter={(e) => !loading && (e.target.style.transform = 'translateY(-1px)')}
                 onMouseLeave={(e) => !loading && (e.target.style.transform = 'translateY(0)')}
               >
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? '🔄 Signing in...' : 'Sign In'}
               </button>
             </form>
 
@@ -272,7 +315,7 @@ export const LoginPage = () => {
                   }}
                 >
                   <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem' }}>
-                    👨‍🏫 Teacher
+                    🧑‍🏫 Teacher
                   </div>
                   <div style={{ color: '#64748b', fontSize: '0.9rem' }}>
                     teacher@demo.com
@@ -336,7 +379,7 @@ export const LoginPage = () => {
                   }}
                 >
                   <div style={{ fontWeight: '600', color: '#1e293b', marginBottom: '0.25rem' }}>
-                    🌟 Universal
+                    🔄 Universal
                   </div>
                   <div style={{ color: '#64748b', fontSize: '0.9rem' }}>
                     demo@harv.com
