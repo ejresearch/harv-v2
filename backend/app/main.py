@@ -1,24 +1,19 @@
 """
-Harv v2.0 Main Application - Phase 2.5 Complete
-Enhanced Memory + OpenAI + WebSocket + Analytics Integration
+Harv v2.0 Main Application - Fixed
+Enhanced Memory + OpenAI + Basic WebSocket Integration
 """
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 import logging
 
 from app.core.config import settings
 from app.core.database import engine
 from app.models import user, course, memory  # Import all models
 from app.api.v1.api import api_router
-from app.websocket.chat_handler import websocket_endpoint
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI application
@@ -42,11 +37,18 @@ app.add_middleware(
 # Include API routes
 app.include_router(api_router, prefix=settings.api_prefix)
 
-# WebSocket endpoint for real-time chat
+# Basic WebSocket endpoint
 @app.websocket("/api/v1/chat/ws/{module_id}")
 async def websocket_chat_endpoint(websocket: WebSocket, module_id: int, user_id: int = None):
-    """Real-time WebSocket chat with enhanced memory + OpenAI"""
-    await websocket_endpoint(websocket, module_id, user_id)
+    """Basic WebSocket chat endpoint"""
+    try:
+        from app.websocket.chat_handler import websocket_endpoint
+        await websocket_endpoint(websocket, module_id, user_id)
+    except ImportError:
+        # Fallback if websocket handler not available
+        await websocket.accept()
+        await websocket.send_text("WebSocket connected but handler not fully implemented yet")
+        await websocket.close()
 
 # Health check endpoint
 @app.get("/")
@@ -57,9 +59,8 @@ async def root():
         "status": "operational",
         "features": [
             "4-layer enhanced memory system",
-            "OpenAI GPT-4 integration", 
-            "Real-time WebSocket chat",
-            "Learning analytics dashboard",
+            "OpenAI GPT-4o integration", 
+            "Real-time chat capabilities",
             "Socratic methodology enforcement"
         ]
     }
@@ -67,18 +68,16 @@ async def root():
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    logger.info("🚀 Harv v2.0 Phase 2.5 starting up...")
+    logger.info("🚀 Harv v2.0 starting up...")
     logger.info("🧠 Enhanced Memory System: ACTIVE")
     logger.info("🤖 OpenAI Integration: ACTIVE") 
-    logger.info("🔌 WebSocket Chat: ACTIVE")
-    logger.info("📊 Analytics Dashboard: ACTIVE")
-    logger.info("✅ All systems operational")
+    logger.info("📚 API Documentation: /docs")
+    logger.info("✅ Server ready")
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("🛑 Harv v2.0 shutting down...")
-    logger.info("✅ Shutdown complete")
 
 if __name__ == "__main__":
     import uvicorn

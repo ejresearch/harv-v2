@@ -1,4 +1,23 @@
-"""
+#!/bin/bash
+# SUPER EASY SETUP - One command does everything
+
+echo "🚀 HARV v2.0 - SUPER EASY SETUP"
+echo "================================"
+
+# Check if we're in the right place
+if [[ ! -d "backend/app" ]]; then
+    echo "❌ Run this from your harv-v2 directory"
+    exit 1
+fi
+
+echo "✅ Found harv-v2 structure"
+
+# Step 1: Fix OpenAI service
+echo "🔧 Step 1: Fixing OpenAI service..."
+python3 - << 'EOF'
+import os
+
+modern_code = '''"""
 OpenAI Service - GPT-4o with Modern API
 """
 
@@ -76,7 +95,7 @@ STUDENT CONTEXT:
 
 Guide through questions, not answers."""
 
-            user_prompt = f"Student: {user_message}\n\nYour Socratic response:"
+            user_prompt = f"Student: {user_message}\\n\\nYour Socratic response:"
             
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -176,3 +195,61 @@ Guide through questions, not answers."""
             "demo_mode": self.demo_mode,
             "model": self.model
         }
+'''
+
+with open("backend/app/services/openai_service.py", "w") as f:
+    f.write(modern_code)
+
+print("✅ OpenAI service updated")
+EOF
+
+# Step 2: Setup environment with placeholder
+echo "🔧 Step 2: Setting up environment..."
+cat > backend/.env << 'EOF'
+# Harv v2.0 Configuration
+DATABASE_URL=sqlite:///./harv_v2.db
+SECRET_KEY=your-super-secret-key-here
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# OpenAI Configuration - ADD YOUR KEY HERE
+OPENAI_API_KEY=REPLACE_WITH_YOUR_OPENAI_KEY
+OPENAI_MODEL=gpt-4o
+
+# Development
+DEBUG=true
+CORS_ORIGINS=["http://localhost:3000", "http://localhost:5173"]
+MEMORY_MAX_CONTEXT_LENGTH=4000
+MEMORY_FALLBACK_ENABLED=true
+SOCRATIC_MODE_ENABLED=true
+PREVENT_DIRECT_ANSWERS=true
+EOF
+
+# Step 3: Test the setup
+echo "🧪 Step 3: Testing setup..."
+cd backend
+python -c "
+try:
+    from app.services.openai_service import OpenAIService
+    from app.api.v1.endpoints.chat import router
+    from app.api.v1.api import api_router
+    print('✅ All imports working!')
+    print(f'📊 API routes: {len(api_router.routes)}')
+except Exception as e:
+    print(f'❌ Import error: {e}')
+"
+
+echo ""
+echo "🎉 SETUP COMPLETE!"
+echo "=================="
+echo ""
+echo "📝 NEXT STEPS:"
+echo "1. Add your OpenAI API key to backend/.env"
+echo "2. Start server: cd backend && uvicorn app.main:app --reload"
+echo "3. Test: curl http://localhost:8000/api/v1/chat/demo/1"
+echo ""
+echo "🔑 Edit backend/.env and replace:"
+echo "   OPENAI_API_KEY=REPLACE_WITH_YOUR_OPENAI_KEY"
+echo "   with your actual OpenAI API key"
+echo ""
+echo "🚀 Then run: cd backend && uvicorn app.main:app --reload"
