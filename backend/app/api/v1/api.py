@@ -1,38 +1,22 @@
 """
-Complete API Router - ALL ENDPOINTS INCLUDED
+API v1 Router - Complete with all endpoints
 """
 
 from fastapi import APIRouter
-from app.api.v1.endpoints import (
-    auth,
-    health,
-    memory,
-    chat,
-    modules,
-    progress,
-    onboarding,
-    admin
-)
 
-# Try to import demo, but don't fail if it doesn't exist
-try:
-    from app.api.v1.endpoints import demo
-    DEMO_AVAILABLE = True
-except ImportError:
-    DEMO_AVAILABLE = False
+# Import all available endpoints
+from app.api.v1.endpoints import auth, users, health, memory
 
 api_router = APIRouter()
 
-# Include all routers
+# Authentication
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
-api_router.include_router(health.router, prefix="/health", tags=["health"])
-api_router.include_router(memory.router, prefix="/memory", tags=["enhanced-memory"])
-api_router.include_router(chat.router, prefix="/chat", tags=["ai-chat"])
-api_router.include_router(modules.router, prefix="/modules", tags=["learning-modules"])
-api_router.include_router(progress.router, prefix="/progress", tags=["progress-tracking"])
-api_router.include_router(onboarding.router, prefix="/onboarding", tags=["user-onboarding"])
-api_router.include_router(admin.router, prefix="/admin", tags=["administration"])
 
-# Include demo router only if available
-if DEMO_AVAILABLE:
-    api_router.include_router(demo.router, prefix="/demo", tags=["demo-features"])
+# User management  
+api_router.include_router(users.router, prefix="/users", tags=["users"])
+
+# Phase 2: Enhanced Memory System
+api_router.include_router(memory.router, prefix="/memory", tags=["enhanced-memory"])
+
+# System health monitoring
+api_router.include_router(health.router, prefix="/health", tags=["health"])
