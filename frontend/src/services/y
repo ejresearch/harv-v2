@@ -1,0 +1,578 @@
+// src/services/api.js - Complete Harv v2.0 API Service
+// Production-ready API service for Mass Communication course platform
+
+class HarvCourseAPI {
+  constructor() {
+    this.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    this.token = localStorage.getItem('auth_token');
+    this.refreshToken = localStorage.getItem('refresh_token');
+  }
+
+  // =============================================================================
+  // CORE REQUEST HANDLER
+  // =============================================================================
+
+  async request(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      console.log(`🌐 API Request: ${options.method || 'GET'} ${url}`);
+      
+      const response = await fetch(url, config);
+      
+      // Handle authentication errors
+      if (response.status === 401) {
+        console.warn('🔒 Authentication failed, clearing tokens');
+        this.clearTokens();
+        throw new Error('Authentication required');
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API Error: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ API Success: ${endpoint}`, data);
+      return data;
+
+    } catch (error) {
+      console.error(`💥 API Request Failed (${endpoint}):`, error);
+      
+      // Return fallback data for development
+      if (this.isDevelopment()) {
+        return this.getFallbackData(endpoint, options.method);
+      }
+      
+      throw error;
+    }
+  }
+
+  // =============================================================================
+  // AUTHENTICATION METHODS
+  // =============================================================================
+
+  async login(credentials) {
+    const response = await this.request('/api/v1/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials)
+    });
+
+    if (response.access_token) {
+      this.setTokens(response.access_token, response.refresh_token);
+    }
+
+    return response;
+  }
+
+  async register(userData) {
+    return this.request('/api/v1/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData)
+    });
+  }
+
+  async getCurrentUser() {
+    return this.request('/api/v1/auth/me');
+  }
+
+  async refreshAccessToken() {
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    const response = await this.request('/api/v1/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: this.refreshToken })
+    });
+
+    if (response.access_token) {
+      this.setTokens(response.access_token, response.refresh_token);
+    }
+
+    return response;
+  }
+
+  async logout() {
+    try {
+      await this.request('/api/v1/auth/logout', {
+        method: 'POST'
+      });
+    } catch (error) {
+      console.warn('Logout request failed, clearing tokens anyway');
+    } finally {
+      this.clearTokens();
+    }
+  }
+
+  // =============================================================================
+  // COURSE MODULES (15 Mass Communication Topics)
+  // =============================================================================
+
+  async getModules() {
+    return this.request('/api/v1/modules/');
+  }
+
+  async getModule(moduleId) {
+    return this.request(`/api/v1/modules/${moduleId}`);
+  }
+
+  async updateModuleContent(moduleId, content) {
+    return this.request(`/api/v1/modules/${moduleId}/content`, {
+      method: 'PUT',
+      body: JSON.stringify(content)
+    });
+  }
+
+  async getModuleResources(moduleId) {
+    return this.request(`/api/v1/modules/${moduleId}/resources`);
+  }
+
+  async uploadModuleDocument(moduleId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return this.request(`/api/v1/modules/${moduleId}/upload`, {
+      method: 'POST',
+      headers: {
+        // Don't set Content-Type, let browser set it for FormData
+        ...(this.token && { Authorization: `Bearer ${this.token}` })
+      },
+      body: formData
+    });
+  }
+
+  // =============================================================================
+  // USER PROGRESS TRACKING
+  // =============================================================================
+
+  async getUserProgress(userId, moduleId) {
+    return this.request(`/api/v1/progress/user/${userId}/module/${moduleId}`);
+  }
+
+  async getUserOverview(userId) {
+    return this.request(`/api/v1/progress/user/${userId}/overview`);
+  }
+
+  async updateUserProgress(userId, moduleId, progressData) {
+    return this.request(`/api/v1/progress/user/${userId}/module/${moduleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(progressData)
+    });
+  }
+
+  async getAllUsersProgress() {
+    return this.request('/api/v1/progress/all');
+  }
+
+  async getUserLearningPath(userId) {
+    return this.request(`/api/v1/progress/user/${userId}/learning-path`);
+  }
+
+  async markModuleComplete(userId, moduleId) {
+    return this.request(`/api/v1/progress/user/${userId}/module/${moduleId}/complete`, {
+      method: 'POST'
+    });
+  }
+
+  // =============================================================================
+  // ENHANCED MEMORY SYSTEM (4-Layer Architecture)
+  // =============================================================================
+
+  async getEnhancedMemory(moduleId, currentMessage = '') {
+    const params = new URLSearchParams({
+      ...(currentMessage && { current_message: currentMessage })
+    });
+    return this.request(`/api/v1/memory/enhanced/${moduleId}?${params}`);
+  }
+
+  async updateMemoryContext(moduleId, memoryData) {
+    return this.request(`/api/v1/memory/enhanced/${moduleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(memoryData)
+    });
+  }
+
+  async getMemoryInsights(userId, moduleId) {
+    return this.request(`/api/v1/memory/insights/user/${userId}/module/${moduleId}`);
+  }
+
+  async getCrossModuleConnections(userId) {
+    return this.request(`/api/v1/memory/connections/user/${userId}`);
+  }
+
+  async getMemoryMetrics(userId) {
+    return this.request(`/api/v1/memory/metrics/user/${userId}`);
+  }
+
+  // =============================================================================
+  // SOCRATIC AI CHAT SYSTEM
+  // =============================================================================
+
+  async sendChatMessage(messageData) {
+    return this.request('/api/v1/chat/enhanced', {
+      method: 'POST',
+      body: JSON.stringify({
+        message: messageData.message,
+        module_id: messageData.module_id,
+        user_id: messageData.user_id,
+        conversation_id: messageData.conversation_id || null,
+        context: messageData.context || {}
+      })
+    });
+  }
+
+  async getChatHistory(userId, moduleId, limit = 50) {
+    return this.request(`/api/v1/chat/history/user/${userId}/module/${moduleId}?limit=${limit}`);
+  }
+
+  async getConversation(conversationId) {
+    return this.request(`/api/v1/chat/conversation/${conversationId}`);
+  }
+
+  async createNewConversation(userId, moduleId) {
+    return this.request('/api/v1/chat/conversation', {
+      method: 'POST',
+      body: JSON.stringify({
+        user_id: userId,
+        module_id: moduleId
+      })
+    });
+  }
+
+  async getSocraticInsights(conversationId) {
+    return this.request(`/api/v1/chat/conversation/${conversationId}/insights`);
+  }
+
+  async rateChatResponse(messageId, rating, feedback = '') {
+    return this.request(`/api/v1/chat/message/${messageId}/rate`, {
+      method: 'POST',
+      body: JSON.stringify({
+        rating: rating,
+        feedback: feedback
+      })
+    });
+  }
+
+  // =============================================================================
+  // USER MANAGEMENT
+  // =============================================================================
+
+  async getUserProfile(userId) {
+    return this.request(`/api/v1/users/${userId}`);
+  }
+
+  async updateUserProfile(userId, profileData) {
+    return this.request(`/api/v1/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    });
+  }
+
+  async getUserLearningStyle(userId) {
+    return this.request(`/api/v1/users/${userId}/learning-style`);
+  }
+
+  async updateLearningStyle(userId, learningStyleData) {
+    return this.request(`/api/v1/users/${userId}/learning-style`, {
+      method: 'PUT',
+      body: JSON.stringify(learningStyleData)
+    });
+  }
+
+  async changePassword(currentPassword, newPassword) {
+    return this.request('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword
+      })
+    });
+  }
+
+  // =============================================================================
+  // TEACHER/ADMIN METHODS
+  // =============================================================================
+
+  async getAdminDashboard() {
+    return this.request('/api/v1/admin/analytics/dashboard');
+  }
+
+  async getAllStudents() {
+    return this.request('/api/v1/admin/students');
+  }
+
+  async getStudentDetail(studentId) {
+    return this.request(`/api/v1/admin/students/${studentId}`);
+  }
+
+  async getCourseAnalytics() {
+    return this.request('/api/v1/admin/analytics/course');
+  }
+
+  async getModuleAnalytics(moduleId) {
+    return this.request(`/api/v1/admin/analytics/module/${moduleId}`);
+  }
+
+  async generateProgressReport(userId, format = 'json') {
+    return this.request(`/api/v1/admin/reports/progress/${userId}?format=${format}`);
+  }
+
+  async bulkUpdateModules(modulesData) {
+    return this.request('/api/v1/admin/modules/bulk-update', {
+      method: 'POST',
+      body: JSON.stringify(modulesData)
+    });
+  }
+
+  // =============================================================================
+  // DEMO/DEVELOPMENT METHODS
+  // =============================================================================
+
+  async switchRole(targetRole) {
+    return this.request('/api/v1/demo/switch-role', {
+      method: 'POST',
+      body: JSON.stringify({ target_role: targetRole })
+    });
+  }
+
+  async resetDemoData() {
+    return this.request('/api/v1/demo/reset', {
+      method: 'POST'
+    });
+  }
+
+  async getDemoAccounts() {
+    return this.request('/api/v1/demo/accounts');
+  }
+
+  // =============================================================================
+  // HEALTH & SYSTEM STATUS
+  // =============================================================================
+
+  async getHealthStatus() {
+    return this.request('/api/v1/health/');
+  }
+
+  async getDatabaseStatus() {
+    return this.request('/api/v1/health/database');
+  }
+
+  async getSystemMetrics() {
+    return this.request('/api/v1/health/metrics');
+  }
+
+  // =============================================================================
+  // TOKEN MANAGEMENT
+  // =============================================================================
+
+  setTokens(accessToken, refreshToken = null) {
+    this.token = accessToken;
+    localStorage.setItem('auth_token', accessToken);
+    
+    if (refreshToken) {
+      this.refreshToken = refreshToken;
+      localStorage.setItem('refresh_token', refreshToken);
+    }
+    
+    console.log('🔑 Tokens updated');
+  }
+
+  clearTokens() {
+    this.token = null;
+    this.refreshToken = null;
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user_role');
+    console.log('🗑️ Tokens cleared');
+  }
+
+  hasValidToken() {
+    return !!this.token;
+  }
+
+  // =============================================================================
+  // DEVELOPMENT HELPERS
+  // =============================================================================
+
+  isDevelopment() {
+    return process.env.NODE_ENV === 'development';
+  }
+
+  getFallbackData(endpoint, method = 'GET') {
+    console.log(`🔄 Using fallback data for: ${method} ${endpoint}`);
+
+    // Demo data for development when API is not available
+    const fallbackData = {
+      '/api/v1/modules/': this.getDemoModules(),
+      '/api/v1/progress/user/': this.getDemoProgress(),
+      '/api/v1/auth/me': this.getDemoUser(),
+      '/api/v1/memory/enhanced/': this.getDemoMemory(),
+      '/api/v1/chat/enhanced': this.getDemoChatResponse()
+    };
+
+    // Find matching endpoint
+    for (const [key, data] of Object.entries(fallbackData)) {
+      if (endpoint.includes(key)) {
+        return data;
+      }
+    }
+
+    // Default fallback
+    return { message: 'Demo data not available', endpoint };
+  }
+
+  getDemoModules() {
+    return [
+      { id: 1, title: 'Your Four Worlds', description: 'Communication models and perception', difficulty_level: 'beginner', estimated_duration: 45, is_active: true },
+      { id: 2, title: 'Media Uses & Effects', description: 'How media functions in society', difficulty_level: 'intermediate', estimated_duration: 60, is_active: true },
+      { id: 3, title: 'Shared Characteristics', description: 'Common elements across media types', difficulty_level: 'intermediate', estimated_duration: 50, is_active: true },
+      { id: 4, title: 'Communication Infrastructure', description: 'Technology evolution in communication', difficulty_level: 'advanced', estimated_duration: 70, is_active: true },
+      { id: 5, title: 'Books', description: 'Birth of mass communication', difficulty_level: 'beginner', estimated_duration: 55, is_active: true },
+      { id: 6, title: 'Newspapers', description: 'News values and gatekeeping', difficulty_level: 'intermediate', estimated_duration: 60, is_active: true },
+      { id: 7, title: 'Magazines', description: 'Special interest targeting', difficulty_level: 'intermediate', estimated_duration: 45, is_active: true },
+      { id: 8, title: 'Comic Books', description: 'Visual storytelling impact', difficulty_level: 'beginner', estimated_duration: 40, is_active: true },
+      { id: 9, title: 'Photography', description: 'Capturing reality through images', difficulty_level: 'intermediate', estimated_duration: 65, is_active: true },
+      { id: 10, title: 'Recordings', description: 'Audio media and cultural impact', difficulty_level: 'intermediate', estimated_duration: 55, is_active: true },
+      { id: 11, title: 'Motion Pictures', description: 'Mass entertainment begins', difficulty_level: 'advanced', estimated_duration: 75, is_active: true },
+      { id: 12, title: 'Radio', description: 'The household utility revolution', difficulty_level: 'intermediate', estimated_duration: 50, is_active: true },
+      { id: 13, title: 'Television', description: 'Center of attention dominant medium', difficulty_level: 'advanced', estimated_duration: 80, is_active: true },
+      { id: 14, title: 'Video Games', description: 'Newest mass medium', difficulty_level: 'advanced', estimated_duration: 65, is_active: true },
+      { id: 15, title: 'Economic Influencers', description: 'Advertising and media ownership', difficulty_level: 'advanced', estimated_duration: 70, is_active: true }
+    ];
+  }
+
+  getDemoProgress() {
+    return {
+      completed_modules: 3,
+      overall_progress: 42,
+      chat_sessions: 8,
+      insights_gained: 15,
+      module_progress: {
+        1: { completion_percentage: 100, mastery_level: 'advanced', total_conversations: 5, total_messages: 47, time_spent: 120, insights_gained: 8, last_accessed: '2024-01-15T10:30:00Z' },
+        2: { completion_percentage: 85, mastery_level: 'intermediate', total_conversations: 3, total_messages: 23, time_spent: 95, insights_gained: 4, last_accessed: '2024-01-16T14:20:00Z' },
+        3: { completion_percentage: 60, mastery_level: 'beginner', total_conversations: 2, total_messages: 15, time_spent: 45, insights_gained: 3, last_accessed: '2024-01-17T09:15:00Z' },
+        4: { completion_percentage: 0, mastery_level: 'beginner', total_conversations: 0, total_messages: 0, time_spent: 0, insights_gained: 0, last_accessed: null }
+      },
+      recent_activity: [
+        { type: 'chat', description: 'Discussed media effects theory with AI tutor', timestamp: '2024-01-17T09:15:00Z' },
+        { type: 'module_complete', description: 'Completed "Your Four Worlds" module', timestamp: '2024-01-16T16:45:00Z' },
+        { type: 'insight_gained', description: 'Connected perception theory to modern social media', timestamp: '2024-01-16T14:30:00Z' }
+      ]
+    };
+  }
+
+  getDemoUser() {
+    return {
+      id: 1,
+      name: 'Alex Student',
+      email: 'student@demo.com',
+      role: 'student',
+      created_at: '2024-01-01T00:00:00Z',
+      last_login: '2024-01-17T08:00:00Z',
+      learning_style: 'visual_kinesthetic',
+      preferences: {
+        difficulty_preference: 'adaptive',
+        learning_pace: 'moderate',
+        socratic_intensity: 'medium'
+      }
+    };
+  }
+
+  getDemoMemory() {
+    return {
+      context_layers: {
+        layer_1: { user_profile: 'Visual learner, prefers examples', cross_module_mastery: 65 },
+        layer_2: { module_context: 'Media Uses & Effects', current_objectives: ['Understanding cultivation theory', 'Applying uses and gratifications'] },
+        layer_3: { conversation_history: 'Discussed media violence effects', current_topic: 'Social media impact' },
+        layer_4: { prior_knowledge: ['Communication models from Module 1', 'Basic media literacy concepts'], connections: 2 }
+      },
+      memory_metrics: {
+        context_used: 1543,
+        layers_active: 4,
+        connections_found: 7,
+        retention_score: 78
+      }
+    };
+  }
+
+  getDemoChatResponse() {
+    return {
+      ai_response: "That's an interesting observation about social media's impact! Let me ask you this: when you see a news story shared on social media versus reading it in a traditional newspaper, what differences do you notice in how you process that information?",
+      conversation_id: 'demo-conversation-123',
+      message_id: 'demo-message-456',
+      socratic_analysis: {
+        question_type: 'exploratory',
+        engagement_level: 'high',
+        learning_objective: 'media_processing_awareness',
+        difficulty_adjustment: 'maintain'
+      },
+      memory_context: this.getDemoMemory(),
+      enhanced: true
+    };
+  }
+
+  // =============================================================================
+  // UTILITY METHODS
+  // =============================================================================
+
+  formatApiError(error) {
+    if (error.message.includes('Authentication required')) {
+      return 'Please log in to continue';
+    }
+    if (error.message.includes('HTTP 404')) {
+      return 'Resource not found';
+    }
+    if (error.message.includes('HTTP 500')) {
+      return 'Server error. Please try again later';
+    }
+    return error.message || 'An unexpected error occurred';
+  }
+
+  async handleApiCall(apiCall, fallbackData = null) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      console.error('API call failed:', error);
+      
+      if (fallbackData) {
+        console.log('Using fallback data');
+        return fallbackData;
+      }
+      
+      throw new Error(this.formatApiError(error));
+    }
+  }
+
+  // Check if backend is available
+  async checkConnection() {
+    try {
+      await this.getHealthStatus();
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+}
+
+// Create singleton instance
+export const api = new HarvCourseAPI();
+
+// Export class for testing
+export { HarvCourseAPI };
+
+// Development helper
+if (process.env.NODE_ENV === 'development') {
+  // Make API available globally for debugging
+  window.harvAPI = api;
+  console.log('🔧 Development mode: API available as window.harvAPI');
+}
