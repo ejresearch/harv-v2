@@ -510,8 +510,8 @@ Use Socratic questioning to guide student learning:
                 summary = MemorySummary(
                     user_id=user_id,
                     module_id=module_id,
-                    key_insights="; ".join(key_insights) if key_insights else "Communication learning in progress",
-                    learning_connections="; ".join(learning_connections) if learning_connections else "",
+                    what_learned="; ".join(key_insights) if key_insights else "Communication learning in progress",
+                    connections_made="; ".join(learning_connections) if learning_connections else "",
                     conversation_count=1,
                     last_interaction=datetime.utcnow()
                 )
@@ -522,9 +522,9 @@ Use Socratic questioning to guide student learning:
                     summary.conversation_count += 1
                 summary.last_interaction = datetime.utcnow()
                 if key_insights:
-                    summary.key_insights = "; ".join(key_insights)
+                    summary.what_learned = "; ".join(key_insights)
                 if learning_connections:
-                    summary.learning_connections = "; ".join(learning_connections)
+                    summary.connections_made = "; ".join(learning_connections)
             
             self.db.commit()
             logger.info(f"💾 Saved conversation insights for user {user_id}, module {module_id}")
