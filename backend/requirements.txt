@@ -13,3 +13,23 @@ openai==1.12.0
 # Real-time metrics and monitoring
 psutil>=5.9.0
 websockets>=11.0.0
+
+# Phase 2.5: OpenAI Integration Dependencies
+openai>=1.0.0
+websockets>=11.0.0
+python-multipart>=0.0.6
+aiofiles>=23.1.0
+asyncio-mqtt>=0.13.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# Analytics and visualization
+pandas>=2.0.0
+numpy>=1.24.0
+plotly>=5.15.0
+seaborn>=0.12.0
+
+# Real-time communication
+fastapi-socketio>=0.0.10
+python-socketio>=5.8.0
+redis>=4.5.0  # For session management (optional)
