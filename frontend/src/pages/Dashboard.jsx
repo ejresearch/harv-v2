@@ -1,329 +1,424 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { BookOpen, MessageCircle, TrendingUp, Clock, Brain, Users, Award, ChevronRight, Play, Pause, BarChart3, Target, Lightbulb } from 'lucide-react';
 
-export default function Dashboard() {
-  const { user, userRole } = useAuth();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState(null);
+const EnhancedDashboard = () => {
+  const [user] = useState({
+    name: "Sarah Chen",
+    role: "Student", 
+    avatar: "SC",
+    enrolled: "Introduction to Mass Communication",
+    startDate: "January 15, 2024"
+  });
 
-  useEffect(() => {
-    setTimeout(() => {
-      setDashboardData({
-        student: {
-          completedModules: 3,
-          totalModules: 15,
-          overallProgress: 45,
-          chatSessions: 12,
-          insightsGained: 28,
-          currentModule: {
-            id: 4,
-            title: 'Communication Infrastructure',
-            progress: 30
-          },
-          recentActivity: [
-            { type: 'module_complete', description: 'Completed "Media Uses & Effects"', time: '2 hours ago' },
-            { type: 'chat', description: 'Had a discussion about media theory', time: '1 day ago' },
-            { type: 'progress', description: 'Made progress in "Shared Characteristics"', time: '2 days ago' }
-          ]
-        }
-      });
-      setLoading(false);
-    }, 800);
-  }, []);
+  const [stats, setStats] = useState({
+    modulesCompleted: 3,
+    totalModules: 15,
+    studyTime: 127,
+    discussionMessages: 89,
+    memoryConnections: 24,
+    currentStreak: 7
+  });
 
-  if (loading) {
-    return <DashboardSkeleton />;
-  }
+  const [recentActivity, setRecentActivity] = useState([
+    {
+      id: 1,
+      type: 'completion',
+      title: 'Completed "Communication Infrastructure"',
+      time: '2 hours ago',
+      icon: '✅',
+      module: 4
+    },
+    {
+      id: 2, 
+      type: 'discussion',
+      title: 'AI Discussion: Media Effects Theory',
+      time: '1 day ago',
+      icon: '💬',
+      module: 2
+    },
+    {
+      id: 3,
+      type: 'memory',
+      title: 'New cross-module connection discovered',
+      time: '2 days ago', 
+      icon: '🧠',
+      module: 3
+    }
+  ]);
 
-  return <StudentDashboardContent data={dashboardData.student} user={user} userRole={userRole} navigate={navigate} />;
-}
+  const modules = [
+    { id: 1, title: "Your Four Worlds", icon: "🌍", progress: 100, status: "completed", timeSpent: 45 },
+    { id: 2, title: "Media Uses & Effects", icon: "📺", progress: 100, status: "completed", timeSpent: 52 },
+    { id: 3, title: "Shared Characteristics", icon: "🔗", progress: 100, status: "completed", timeSpent: 38 },
+    { id: 4, title: "Communication Infrastructure", icon: "🌐", progress: 85, status: "in-progress", timeSpent: 41 },
+    { id: 5, title: "Books", icon: "📚", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 6, title: "Newspapers", icon: "📰", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 7, title: "Magazines", icon: "📖", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 8, title: "Comic Books", icon: "📝", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 9, title: "Photography", icon: "📷", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 10, title: "Recordings", icon: "🎵", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 11, title: "Motion Pictures", icon: "🎬", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 12, title: "Radio", icon: "📻", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 13, title: "Television", icon: "📺", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 14, title: "Video Games", icon: "🎮", progress: 0, status: "not-started", timeSpent: 0 },
+    { id: 15, title: "Economic Influencers", icon: "💰", progress: 0, status: "not-started", timeSpent: 0 }
+  ];
 
-const StudentDashboardContent = ({ data, user, userRole, navigate }) => {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {/* Welcome Header */}
-      <div className="miranda-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+  const StatCard = ({ title, value, subtitle, icon: Icon, color, trend }) => (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
+        </div>
+        <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${color}`}>
+          <Icon className="w-6 h-6 text-white" />
+        </div>
+      </div>
+      {trend && (
+        <div className="mt-4 flex items-center gap-1">
+          <TrendingUp className="w-4 h-4 text-green-500" />
+          <span className="text-sm text-green-600 font-medium">{trend}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  const ModuleCard = ({ module }) => (
+    <div className={`bg-white rounded-lg border border-gray-200 p-4 hover:border-blue-300 transition-all cursor-pointer ${
+      module.status === 'completed' ? 'ring-1 ring-green-100' : 
+      module.status === 'in-progress' ? 'ring-1 ring-blue-100' : ''
+    }`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="text-2xl">{module.icon}</div>
           <div>
-            <h1 className="miranda-title">
-              Welcome back, {user?.name}! 👋
-            </h1>
-            <p className="miranda-subtitle">
-              Ready to continue your Mass Communication journey?
-            </p>
+            <h4 className="font-medium text-gray-900">{module.title}</h4>
+            <p className="text-xs text-gray-500">Module {module.id}</p>
           </div>
-          {userRole === 'universal' && (
-            <div style={{
-              background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
-              color: 'white',
-              padding: '0.5rem 1rem',
-              borderRadius: '20px',
-              fontSize: '0.85rem',
-              fontWeight: '600'
-            }}>
-              🔄 Universal Access
+        </div>
+        <div className="flex items-center gap-2">
+          {module.status === 'completed' && (
+            <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+              <span className="text-white text-xs">✓</span>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '1.5rem'
-      }}>
-        <div 
-          className="miranda-stat-card"
-          onClick={() => navigate('/progress')}
-        >
-          <div className="miranda-stat-value">{data.overallProgress}%</div>
-          <div className="miranda-stat-label">Overall Progress</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-            {data.completedModules}/{data.totalModules} modules
-          </div>
-        </div>
-
-        <div 
-          className="miranda-stat-card"
-          onClick={() => navigate('/chat')}
-        >
-          <div className="miranda-stat-value">{data.chatSessions}</div>
-          <div className="miranda-stat-label">Chat Sessions</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-            with AI tutor
-          </div>
-        </div>
-
-        <div className="miranda-stat-card">
-          <div className="miranda-stat-value">{data.insightsGained}</div>
-          <div className="miranda-stat-label">Insights Gained</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-            learning moments
-          </div>
-        </div>
-
-        <div 
-          className="miranda-stat-card"
-          onClick={() => navigate(`/modules/${data.currentModule.id}`)}
-        >
-          <div className="miranda-stat-value">{data.currentModule.progress}%</div>
-          <div className="miranda-stat-label">Current Module</div>
-          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-            {data.currentModule.title}
-          </div>
-        </div>
-      </div>
-
-      {/* Current Module Progress */}
-      <div className="miranda-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-            Continue Learning
-          </h2>
-          <button
-            onClick={() => navigate(`/modules/${data.currentModule.id}`)}
-            className="miranda-button secondary"
-          >
-            View Module →
-          </button>
-        </div>
-        
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(139, 92, 246, 0.05))',
-          borderRadius: '16px',
-          padding: '1.5rem',
-          border: '1px solid rgba(59, 130, 246, 0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.5rem'
-            }}>
-              📡
+          {module.status === 'in-progress' && (
+            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+              <Pause className="w-3 h-3 text-white" />
             </div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '600', color: '#1e293b', marginBottom: '0.5rem' }}>
-                {data.currentModule.title}
-              </h3>
-              <p style={{ color: '#64748b', marginBottom: '1rem', fontSize: '0.95rem' }}>
-                Understanding how communication systems work
-              </p>
-              <div className="miranda-progress-bar">
-                <div 
-                  className="miranda-progress-fill"
-                  style={{ width: `${data.currentModule.progress}%` }}
-                ></div>
+          )}
+          <ChevronRight className="w-4 h-4 text-gray-400" />
+        </div>
+      </div>
+      
+      <div className="mb-3">
+        <div className="flex justify-between text-sm mb-1">
+          <span className="text-gray-600">Progress</span>
+          <span className="font-medium">{module.progress}%</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className={`h-2 rounded-full transition-all duration-300 ${
+              module.status === 'completed' ? 'bg-green-500' :
+              module.status === 'in-progress' ? 'bg-blue-500' : 'bg-gray-300'
+            }`}
+            style={{ width: `${module.progress}%` }}
+          ></div>
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-between text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          {module.timeSpent} min
+        </span>
+        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+          module.status === 'completed' ? 'bg-green-100 text-green-700' :
+          module.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+          'bg-gray-100 text-gray-600'
+        }`}>
+          {module.status === 'completed' ? 'Complete' :
+           module.status === 'in-progress' ? 'In Progress' : 'Not Started'}
+        </span>
+      </div>
+    </div>
+  );
+
+  const ActivityItem = ({ activity }) => (
+    <div className="flex items-center gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
+      <div className="text-lg">{activity.icon}</div>
+      <div className="flex-1">
+        <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+        <p className="text-xs text-gray-500">{activity.time}</p>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Welcome back, {user.name}! 👋
+              </h1>
+              <p className="text-gray-600 mt-1">Continue your journey through {user.enrolled}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Current Streak</p>
+                <p className="text-xl font-bold text-orange-600">{stats.currentStreak} days 🔥</p>
               </div>
-              <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.5rem' }}>
-                {data.currentModule.progress}% complete
-              </p>
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
+                {user.avatar}
+              </div>
             </div>
-            <button
-              onClick={() => navigate(`/modules/${data.currentModule.id}`)}
-              className="miranda-button"
-            >
-              Continue
-            </button>
           </div>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-        gap: '1.5rem'
-      }}>
-        <QuickActionCard
-          title="Chat with AI Tutor"
-          description="Ask questions about communication theory and get Socratic guidance"
-          icon="🤖"
-          action={() => navigate('/chat')}
-          gradient="linear-gradient(135deg, #10b981, #059669)"
-        />
-        <QuickActionCard
-          title="View All Modules"
-          description="Browse through all 15 Mass Communication modules"
-          icon="📚"
-          action={() => navigate('/modules/1')}
-          gradient="linear-gradient(135deg, #8b5cf6, #ec4899)"
-        />
-      </div>
-
-      {/* Recent Activity */}
-      <div className="miranda-card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#1e293b' }}>
-            Recent Activity
-          </h2>
-          <button
-            onClick={() => navigate('/progress')}
-            className="miranda-button secondary"
-          >
-            View Full Progress →
-          </button>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <StatCard
+            title="Modules Completed"
+            value={`${stats.modulesCompleted}/${stats.totalModules}`}
+            subtitle="3 more this week"
+            icon={BookOpen}
+            color="bg-blue-500"
+            trend="+2 from last week"
+          />
+          <StatCard
+            title="Study Time"
+            value={`${stats.studyTime}m`}
+            subtitle="This week"
+            icon={Clock}
+            color="bg-green-500"
+            trend="+15% increase"
+          />
+          <StatCard
+            title="AI Discussions"
+            value={stats.discussionMessages}
+            subtitle="Messages exchanged"
+            icon={MessageCircle}
+            color="bg-purple-500"
+            trend="Very active"
+          />
+          <StatCard
+            title="Memory Connections"
+            value={stats.memoryConnections}
+            subtitle="Cross-module links"
+            icon={Brain}
+            color="bg-orange-500"
+            trend="+5 this week"
+          />
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {data.recentActivity.map((activity, index) => (
-            <ActivityItem key={index} {...activity} />
-          ))}
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Course Progress */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Course Progress</h2>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span>{Math.round((stats.modulesCompleted / stats.totalModules) * 100)}% Complete</span>
+                  <div className="w-16 h-2 bg-gray-200 rounded-full">
+                    <div 
+                      className="h-2 bg-blue-500 rounded-full transition-all"
+                      style={{ width: `${(stats.modulesCompleted / stats.totalModules) * 100}%` }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {modules.slice(0, 8).map(module => (
+                  <ModuleCard key={module.id} module={module} />
+                ))}
+              </div>
+              
+              <button className="w-full mt-6 py-3 text-blue-600 hover:text-blue-700 font-medium transition-colors">
+                View All Modules ({modules.length})
+              </button>
+            </div>
+
+            {/* Learning Analytics */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">Learning Analytics</h2>
+              
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <BarChart3 className="w-6 h-6 text-blue-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-blue-900">Study Pattern</p>
+                  <p className="text-xs text-blue-700">Consistent</p>
+                </div>
+                <div className="text-center p-4 bg-green-50 rounded-lg">
+                  <Target className="w-6 h-6 text-green-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-900">Focus Areas</p>
+                  <p className="text-xs text-green-700">Theory & Practice</p>
+                </div>
+                <div className="text-center p-4 bg-purple-50 rounded-lg">
+                  <Lightbulb className="w-6 h-6 text-purple-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-purple-900">Insights</p>
+                  <p className="text-xs text-purple-700">High Discovery</p>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Questions Asked</span>
+                  <span className="text-sm font-medium">47</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Concepts Mastered</span>
+                  <span className="text-sm font-medium">12/18</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Discussion Quality</span>
+                  <span className="text-sm font-medium text-green-600">Excellent</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Continue Learning</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button className="p-4 border-2 border-dashed border-blue-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all text-left">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Play className="w-5 h-5 text-blue-600" />
+                    <span className="font-medium text-blue-900">Resume Module 4</span>
+                  </div>
+                  <p className="text-sm text-blue-700">Communication Infrastructure</p>
+                  <p className="text-xs text-blue-600 mt-1">15 minutes remaining</p>
+                </button>
+                
+                <button className="p-4 border-2 border-dashed border-green-300 rounded-lg hover:border-green-400 hover:bg-green-50 transition-all text-left">
+                  <div className="flex items-center gap-3 mb-2">
+                    <MessageCircle className="w-5 h-5 text-green-600" />
+                    <span className="font-medium text-green-900">AI Discussion</span>
+                  </div>
+                  <p className="text-sm text-green-700">Ask questions about any topic</p>
+                  <p className="text-xs text-green-600 mt-1">Always available</p>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">Recent Activity</h3>
+              <div className="space-y-1">
+                {recentActivity.map(activity => (
+                  <ActivityItem key={activity.id} activity={activity} />
+                ))}
+              </div>
+              <button className="w-full mt-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium">
+                View All Activity
+              </button>
+            </div>
+
+            {/* Memory System Status */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Brain className="w-5 h-5 text-purple-600" />
+                <h3 className="font-semibold text-gray-900">Enhanced Memory</h3>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Profile Completeness</span>
+                  <span className="text-sm font-medium text-green-600">95%</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Learning Patterns</span>
+                  <span className="text-sm font-medium text-blue-600">Active</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Cross-Connections</span>
+                  <span className="text-sm font-medium text-purple-600">{stats.memoryConnections}</span>
+                </div>
+              </div>
+              
+              <div className="mt-4 p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm text-purple-800 font-medium">Memory Insight</p>
+                <p className="text-xs text-purple-700 mt-1">
+                  Your learning style shows strong visual-conceptual preferences. 
+                  The AI is adapting discussions accordingly.
+                </p>
+              </div>
+            </div>
+
+            {/* Achievements */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Award className="w-5 h-5 text-yellow-600" />
+                <h3 className="font-semibold text-gray-900">Achievements</h3>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg">🏆</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">First Module Master</p>
+                    <p className="text-xs text-gray-600">Completed your first module</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg">💬</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Discussion Expert</p>
+                    <p className="text-xs text-gray-600">50+ meaningful exchanges</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg">🧠</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Connection Maker</p>
+                    <p className="text-xs text-gray-600">Discovered 20+ links</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Study Schedule */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="font-semibold text-gray-900 mb-4">This Week's Plan</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Today</span>
+                  <span className="text-sm font-medium text-blue-600">Module 4 Discussion</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Tomorrow</span>
+                  <span className="text-sm font-medium">Complete Module 4</span>
+                </div>
+                <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                  <span className="text-sm text-gray-600">Friday</span>
+                  <span className="text-sm font-medium">Start Module 5: Books</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const QuickActionCard = ({ title, description, icon, action, gradient }) => {
-  return (
-    <div
-      onClick={action}
-      style={{
-        background: gradient,
-        borderRadius: '16px',
-        padding: '1.5rem',
-        color: 'white',
-        cursor: 'pointer',
-        transition: 'all 0.3s ease',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '1rem'
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.transform = 'translateY(-4px)';
-        e.target.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.2)';
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.transform = 'translateY(0)';
-        e.target.style.boxShadow = 'none';
-      }}
-    >
-      <span style={{ fontSize: '2rem' }}>{icon}</span>
-      <div>
-        <h3 style={{ fontSize: '1.2rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-          {title}
-        </h3>
-        <p style={{ opacity: 0.9, fontSize: '0.9rem' }}>
-          {description}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-const ActivityItem = ({ type, description, time }) => {
-  const icons = {
-    module_complete: '✅',
-    chat: '💬',
-    progress: '📈'
-  };
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '1rem',
-      padding: '1rem',
-      background: 'rgba(248, 250, 252, 0.8)',
-      borderRadius: '12px',
-      border: '1px solid rgba(226, 232, 240, 0.8)'
-    }}>
-      <div style={{
-        width: '40px',
-        height: '40px',
-        borderRadius: '10px',
-        background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1))',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '1.2rem'
-      }}>
-        {icons[type] || '📝'}
-      </div>
-      <div style={{ flex: 1 }}>
-        <p style={{ fontWeight: '500', color: '#1e293b', marginBottom: '0.25rem' }}>
-          {description}
-        </p>
-        <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-          {time}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-const DashboardSkeleton = () => {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      {[1, 2, 3].map(i => (
-        <div key={i} className="miranda-card" style={{ opacity: 0.6 }}>
-          <div style={{
-            height: '120px',
-            background: 'linear-gradient(90deg, rgba(226, 232, 240, 0.8) 25%, rgba(255, 255, 255, 0.8) 50%, rgba(226, 232, 240, 0.8) 75%)',
-            borderRadius: '12px',
-            backgroundSize: '200% 100%',
-            animation: 'shimmer 2s infinite'
-          }}></div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// Add shimmer animation
-const shimmerStyle = document.createElement('style');
-shimmerStyle.textContent = `
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-`;
-document.head.appendChild(shimmerStyle);
+export default EnhancedDashboard;
