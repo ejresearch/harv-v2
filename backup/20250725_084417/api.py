@@ -14,13 +14,6 @@ from app.api.v1.endpoints import (
     admin
 )
 
-# Try to import demo, but don't fail if it doesn't exist
-try:
-    from app.api.v1.endpoints import demo
-    DEMO_AVAILABLE = True
-except ImportError:
-    DEMO_AVAILABLE = False
-
 api_router = APIRouter()
 
 # Include all routers
@@ -32,7 +25,3 @@ api_router.include_router(modules.router, prefix="/modules", tags=["learning-mod
 api_router.include_router(progress.router, prefix="/progress", tags=["progress-tracking"])
 api_router.include_router(onboarding.router, prefix="/onboarding", tags=["user-onboarding"])
 api_router.include_router(admin.router, prefix="/admin", tags=["administration"])
-
-# Include demo router only if available
-if DEMO_AVAILABLE:
-    api_router.include_router(demo.router, prefix="/demo", tags=["demo-features"])

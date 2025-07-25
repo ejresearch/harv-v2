@@ -1,91 +1,147 @@
 """
-Demo Data API Endpoints
-File: backend/app/api/v1/endpoints/demo.py
+Demo Role Switching Endpoints
+Allows seamless switching between student/teacher/admin perspectives
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from pydantic import BaseModel
+from typing import Optional, Dict, Any
 from datetime import datetime
-import json
 
 from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models import User
 
 router = APIRouter()
 
-@router.get("/stats")
-async def get_demo_stats(db: Session = Depends(get_db)):
-    """Get real database statistics for demo"""
-    try:
-        # Get real counts from database
-        users_count = db.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
-        conversations_count = db.execute(text("SELECT COUNT(*) FROM conversations")).scalar() or 0
-        messages_count = db.execute(text("SELECT COUNT(*) FROM messages")).scalar() or 0
-        memories_count = db.execute(text("SELECT COUNT(*) FROM memory_summaries")).scalar() or 0
-        
-        return {
-            "database_metrics": {
-                "users": users_count,
-                "conversations": conversations_count,
-                "messages": messages_count,
-                "memories": memories_count
-            },
-            "timestamp": datetime.now().isoformat(),
-            "status": "real_data"
-        }
-    except Exception as e:
-        # Fallback demo data
-        return {
-            "database_metrics": {
-                "users": 1,
-                "conversations": 0,
-                "messages": 0,
-                "memories": 0
-            },
-            "timestamp": datetime.now().isoformat(),
-            "status": f"fallback_data: {str(e)}"
-        }
+class RoleSwitchRequest(BaseModel):
+    target_role: str  # 'student', 'educator', 'admin'
+    maintain_session: bool = True
 
-@router.get("/sql-activity")
-async def get_sql_activity(db: Session = Depends(get_db)):
-    """Get recent database activity"""
-    try:
-        # Get recent data from key tables
-        users = db.execute(text("SELECT id, name, email FROM users LIMIT 5")).fetchall()
-        conversations = db.execute(text("SELECT id, title, updated_at FROM conversations ORDER BY updated_at DESC LIMIT 3")).fetchall()
-        
-        return {
-            "users_table": [
-                {"id": row[0], "name": row[1], "email": row[2]}
-                for row in users
-            ],
-            "conversations_table": [
-                {"id": row[0], "title": row[1], "updated_at": str(row[2])}
-                for row in conversations
-            ],
-            "timestamp": datetime.now().isoformat()
-        }
-    except Exception as e:
-        return {
-            "users_table": [],
-            "conversations_table": [],
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
+@router.post("/switch-role")
+async def switch_demo_role(
+    role_request: RoleSwitchRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Switch between demo roles for comprehensive system exploration"""
+    
+    # Check if user has demo privileges
+    if current_user.role != "universal" and current_user.email != "demo@harv.com":
+        raise HTTPException(
+            status_code=403,
+            detail="Role switching only available for demo users"
+        )
+    
+    valid_roles = ["student", "educator", "admin"]
+    if role_request.target_role not in valid_roles:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {valid_roles}"
+        )
+    
+    # Update user's current demo role
+    current_user.demo_active_role = role_request.target_role
+    db.commit()
+    
+    return {
+        "success": True,
+        "switched_to": role_request.target_role,
+        "previous_role": getattr(current_user, 'previous_demo_role', 'student'),
+        "message": f"Demo role switched to {role_request.target_role}. You now have access to {role_request.target_role} features."
+    }
 
-@router.get("/create-demo-data") 
-async def create_demo_data(db: Session = Depends(get_db)):
-    """Create demo data for testing"""
-    try:
-        # This would create demo data in a real implementation
-        # For now, just return success
-        return {
-            "message": "Demo data creation endpoint",
-            "status": "not_implemented", 
-            "timestamp": datetime.now().isoformat()
+@router.get("/context/{role}")
+async def get_role_demo_context(role: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Get demo context and sample data for specific role"""
+    
+    contexts = {
+        "student": {
+            "dashboard_features": [
+                "Learning progress tracking",
+                "Socratic AI chat interface", 
+                "Module completion status",
+                "Memory system visualization",
+                "Personal learning analytics"
+            ],
+            "sample_data": {
+                "active_modules": 5,
+                "completion_rate": "65%",
+                "chat_sessions": 12,
+                "learning_insights": 8
+            }
+        },
+        "educator": {
+            "dashboard_features": [
+                "Student progress monitoring",
+                "Module content management",
+                "Socratic prompt configuration",
+                "Learning analytics dashboard",
+                "Content creation tools"
+            ],
+            "sample_data": {
+                "total_students": 24,
+                "active_modules": 15,
+                "avg_engagement": "87%",
+                "memory_insights": 156
+            }
+        },
+        "admin": {
+            "dashboard_features": [
+                "System performance monitoring",
+                "User management interface",
+                "Database health tracking", 
+                "Memory system analytics",
+                "Configuration management"
+            ],
+            "sample_data": {
+                "system_uptime": "99.9%",
+                "total_users": 342,
+                "api_response_time": "67ms",
+                "memory_efficiency": "94%"
+            }
         }
-    except Exception as e:
-        return {
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
+    }
+    
+    if role not in contexts:
+        raise HTTPException(status_code=404, detail="Role context not found")
+    
+    return contexts[role]
+
+@router.get("/available-features")
+async def get_available_demo_features(current_user: User = Depends(get_current_user)):
+    """Get all available features based on current demo role"""
+    
+    current_role = getattr(current_user, 'demo_active_role', current_user.role)
+    
+    feature_matrix = {
+        "student": {
+            "dashboard": "Student learning dashboard",
+            "chat": "Socratic AI tutoring chat",
+            "modules": "Learning module access",
+            "progress": "Personal progress tracking",
+            "memory": "Memory system visualization"
+        },
+        "educator": {
+            "dashboard": "Educator analytics dashboard", 
+            "students": "Student progress monitoring",
+            "content": "Module content management",
+            "analytics": "Learning effectiveness analytics",
+            "prompts": "Socratic prompt configuration"
+        },
+        "admin": {
+            "dashboard": "System administration dashboard",
+            "users": "User account management", 
+            "health": "System health monitoring",
+            "database": "Database activity tracking",
+            "config": "System configuration management"
         }
+    }
+    
+    return {
+        "current_role": current_role,
+        "available_features": feature_matrix.get(current_role, {}),
+        "can_switch_roles": current_user.role == "universal",
+        "demo_mode": True
+    }
